@@ -1,0 +1,28 @@
+{
+  "id": "task-review",
+  "name": "Task Review Workflow",
+  "description": "AI-driven daily or weekly task review and suggestions",
+  "trigger": {
+    "type": "scheduled",
+    "schedule": "daily"
+  },
+  "steps": [
+    {
+      "id": "load_tasks",
+      "agent": "task-store-agent",
+      "input": {
+        "scope": "all"
+      }
+    },
+    {
+      "id": "analyze_productivity",
+      "agent": "task-review-agent",
+      "input": {
+        "tasks": "{{load_tasks.result}}"
+      }
+    }
+  ],
+  "result": {
+    "message": "{{analyze_productivity.summary}}"
+  }
+}

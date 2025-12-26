@@ -1,0 +1,28 @@
+{
+  "id": "task-update",
+  "name": "Update Task Workflow",
+  "description": "Update task status or details using natural language",
+  "trigger": {
+    "type": "user_input"
+  },
+  "steps": [
+    {
+      "id": "identify_task",
+      "agent": "task-query-agent",
+      "input": {
+        "query": "{{user_input}}"
+      }
+    },
+    {
+      "id": "apply_update",
+      "agent": "task-update-agent",
+      "input": {
+        "task_id": "{{identify_task.task_id}}",
+        "update": "{{user_input}}"
+      }
+    }
+  ],
+  "result": {
+    "message": "Task updated successfully"
+  }
+}

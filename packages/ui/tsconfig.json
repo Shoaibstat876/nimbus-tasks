@@ -1,0 +1,9 @@
+{
+  "extends": "../config/typescript/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src"]
+}
