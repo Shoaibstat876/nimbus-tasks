@@ -1,0 +1,41 @@
+{
+  "id": "task-create",
+  "name": "Create Task Workflow",
+  "description": "Convert natural language into a structured todo task",
+  "trigger": {
+    "type": "user_input"
+  },
+  "steps": [
+    {
+      "id": "extract_task",
+      "agent": "task-parser-agent",
+      "input": {
+        "text": "{{user_input}}"
+      },
+      "output": {
+        "title": "string",
+        "description": "string",
+        "priority": "low | medium | high",
+        "due_date": "YYYY-MM-DD | null"
+      }
+    },
+    {
+      "id": "normalize_defaults",
+      "type": "logic",
+      "rules": {
+        "status": "pending",
+        "priority": "medium"
+      }
+    },
+    {
+      "id": "save_task",
+      "agent": "task-store-agent",
+      "input": {
+        "task": "{{extract_task.output}}"
+      }
+    }
+  ],
+  "result": {
+    "message": "Task created successfully"
+  }
+}

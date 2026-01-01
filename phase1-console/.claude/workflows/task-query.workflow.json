@@ -1,0 +1,34 @@
+{
+  "id": "task-query",
+  "name": "Query Tasks Workflow",
+  "description": "Answer questions about tasks (filters, status, due dates)",
+  "trigger": {
+    "type": "user_input"
+  },
+  "steps": [
+    {
+      "id": "parse_query",
+      "agent": "task-query-agent",
+      "input": {
+        "query": "{{user_input}}"
+      }
+    },
+    {
+      "id": "fetch_tasks",
+      "agent": "task-store-agent",
+      "input": {
+        "filters": "{{parse_query.filters}}"
+      }
+    },
+    {
+      "id": "summarize",
+      "agent": "task-summary-agent",
+      "input": {
+        "tasks": "{{fetch_tasks.result}}"
+      }
+    }
+  ],
+  "result": {
+    "message": "{{summarize.output}}"
+  }
+}

@@ -6,3 +6,10 @@ out
 .env.local
 .DS_Store
 pnpm-debug.log
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+Thumbs.db
