@@ -1,15 +1,2 @@
-# Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# Environment
+# Phase 1 console specific
 .env
-
-# Editors
-.vscode/
-.idea/
-
-# OS
-Thumbs.db
