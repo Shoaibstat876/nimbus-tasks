@@ -1,0 +1,79 @@
+$headers = @{
+  Authorization = "Bearer YOUR_TOKEN_HERE"
+  "Content-Type" = "application/json"
+}
+
+PS D:\Shoaib Project\nimbus-tasks> cd "D:\Shoaib Project\nimbus-tasks\apps\api"
+>> .\.venv\Scripts\Activate.ps1
+>> 
+>> $token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzY3ODIxOTk3fQ.y4Si52R5idV24vbvq9G2Fjwdm42npo35R6raD5ISFKQ"
+>> 
+>> $headers = @{
+>>   Authorization = "Bearer $token"
+>>   "Content-Type" = "application/json"
+>> }
+>>
+>> Invoke-RestMethod `
+>>   -Uri "http://127.0.0.1:8000/api/auth/me" `
+>>   -Method GET `
+>>   -Headers $headers
+>>
+
+id email
+-- -----
+ 1 tester_unique_1@example.com
+
+
+(.venv) PS D:\Shoaib Project\nimbus-tasks\apps\api> $body = @{
+>>   title = "Second owned task"
+>> } | ConvertTo-Json
+>>
+>> Invoke-RestMethod `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Method POST `
+>>   -Headers $headers `
+>>   -Body $body
+>>
+
+
+id           : 3
+user_id      : 1
+title        : Second owned task
+is_completed : False
+created_at   : 2026-01-06T21:43:24.738135
+updated_at   : 2026-01-06T21:43:24.738135
+
+
+----------------------------------------------------------------------------------------
+(.venv) PS D:\Shoaib Project\nimbus-tasks\apps\api> 
+
+
+(.venv) PS D:\Shoaib Project\nimbus-tasks\apps\api> $token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzY3ODIxOTk3fQ.y4Si52R5idV24vbvq9G2Fjwdm42npo35R6raD5ISFKQ"
+>>
+>> $headers = @{
+>>   Authorization = "Bearer $token"
+>>   "Content-Type" = "application/json"
+>> }
+(.venv) PS D:\Shoaib Project\nimbus-tasks\apps\api> Invoke-RestMethod `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Method GET `
+>>   -Headers $headers
+
+
+id           : 3
+user_id      : 1
+title        : Second owned task
+is_completed : False
+created_at   : 2026-01-06T21:43:24.738135
+updated_at   : 2026-01-06T21:43:24.738135
+
+id           : 2
+user_id      : 1
+title        : Owned task A
+is_completed : False
+created_at   : 2026-01-06T12:13:15.900520
+updated_at   : 2026-01-06T12:13:15.900520
+
+
+
+(.venv) PS D:\Shoaib Project\nimbus-tasks\apps\api> 
