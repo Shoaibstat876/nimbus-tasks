@@ -1,0 +1,203 @@
+********************************************************************************
+NIMBUS PROJECT: SECURITY OWNERSHIP VERIFICATION LOG
+Date: 2026-01-09
+Test Goal: Verify that User B cannot access or modify User A's data (Multi-tenancy)
+********************************************************************************
+
+1. REGISTERING TEST USERS
+---------------------------------------------------------
+Owner A: owner.a@test.com
+Owner B: owner.b@test.com
+Result: Success (User A ID: 9, User B ID: 10)
+
+2. AUTHENTICATION & TOKEN GENERATION
+---------------------------------------------------------
+Token A: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (Owner A)
+Token B: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (Owner B)
+
+3. RESOURCE CREATION (USER A)
+---------------------------------------------------------
+Command: POST /api/tasks (Title: "A private task")
+Result: Task ID 8 created for User ID 9.
+
+4. SECURITY ATTACK SIMULATION (USER B ATTEMPTING TO MODIFY USER A)
+---------------------------------------------------------
+[TEST 1] User B attempts PUT (Update) on Task 8:
+Response: 404 (Not Found) -> SUCCESS: User B blocked.
+
+[TEST 2] User B attempts PATCH (Toggle) on Task 8:
+Response: 404 (Not Found) -> SUCCESS: User B blocked.
+
+[TEST 3] User B attempts DELETE on Task 8:
+Response: 404 (Not Found) -> SUCCESS: User B blocked.
+
+5. DATA ISOLATION VERIFICATION (READ ACCESS)
+---------------------------------------------------------
+[TEST 4] User A requests their task list:
+Result: Task 8 is visible.
+
+[TEST 5] User B requests their task list:
+Result: Empty list (User A's task is hidden).
+
+********************************************************************************
+SECURITY VERIFICATION: PASSED
+The backend correctly implements ownership-based access control.
+********************************************************************************
+
+terminal output :
+PS D:\Shoaib Project\nimbus-tasks> cd "D:\Shoaib Project\nimbus-tasks\phase2-backend\api"
+>> 
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> curl -X POST "http://127.0.0.1:8000/api/auth/register" `
+>>   -H "Content-Type: application/json" `
+>>   -d "{\"email\":\"owner.a@test.com\",\"password\":\"pass1234\"}"
+>> 
+Invoke-WebRequest : Cannot bind parameter 'Headers'. Cannot convert the "Content-Type: 
+application/json" value of type "System.String" to type "System.Collections.IDictionary".
+At line:2 char:6
++   -H "Content-Type: application/json" `
++      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Invoke-WebRequest], ParameterBindingException    
+    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.InvokeWe  
+   bRequestCommand
+
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> Invoke-RestMethod `
+>>   -Method POST `
+>>   -Uri "http://127.0.0.1:8000/api/auth/register" `
+>>   -Headers @{ "Content-Type" = "application/json" } `
+>>   -Body '{"email":"owner.a@test.com","password":"pass1234"}'
+>>
+
+  ok id email                                         Invoke-RestMethod `
+>>   -Method POST `
+>>   -Uri "http://127.0.0.1:8000/api/auth/register" `
+>>   -Headers @{ "Content-Type" = "application/json" } `
+>>   -Body '{"email":"owner.b@test.com","password":"pass1234"}'
+>> D:\Shoaib Project\nimbus-tasks\phase2-backend\api>
+
+  ok id email
+  -- -- -----
+True 10 owner.b@test.com
+
+
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> $A = Invoke-RestMethod `
+>>   -Method POST `
+>>   -Uri "http://127.0.0.1:8000/api/auth/login" `
+>>   -Headers @{ "Content-Type" = "application/x-www-form-urlencoded" } `
+>>   -Body "username=owner.a@test.com&password=pass1234"
+>> 
+>> $TOKEN_A = $A.access_token
+>> $TOKEN_A
+>> 
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5IiwiaWF0IjoxNzY3OTE4NTA2LCJleHAiOjE3NjgwMDQ5MDZ9.DQjTHJ24FdRyxpFiKmikniQj2PUnBH5-oefJB3UNXJQ
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> $B = Invoke-RestMethod `
+>>   -Method POST `
+>>   -Uri "http://127.0.0.1:8000/api/auth/login" `
+>>   -Headers @{ "Content-Type" = "application/x-www-form-urlencoded" } `
+>>   -Body "username=owner.b@test.com&password=pass1234"
+>> 
+>> $TOKEN_B = $B.access_token
+>> $TOKEN_B
+>> 
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMCIsImlhdCI6MTc2NzkxODUzMSwiZXhwIjoxNzY4MDA0OTMxfQ.fI-NUQ78DHd6IBI2bxqlmHbJq25_GcioDzbV94jy3jY
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> $T = Invoke-RestMethod `
+>>   -Method POST `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Headers @{ "Authorization" = "Bearer $TOKEN_A"; "Content-Type" = "application/json" } `        
+>>   -Body '{"title":"A private task"}'
+>>
+>> $TASK_ID = $T.id
+>> $TASK_ID
+>>
+8
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> try {
+>>   Invoke-RestMethod `
+>>     -Method PUT `
+>>     -Uri "http://127.0.0.1:8000/api/tasks/8" `
+>>     -Headers @{ "Authorization" = "Bearer $TOKEN_B"; "Content-Type" = "application/json" } `      
+>>     -Body '{"title":"Hacked by B"}'
+>>   "❌ Unexpected: update succeeded"
+>> } catch {
+>>   $_.Exception.Response.StatusCode.value__
+>> }
+>>
+404
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> try {
+>>   Invoke-RestMethod `
+>>     -Method PUT `
+>>     -Uri "http://127.0.0.1:8000/api/tasks/8" `
+>>     -Headers @{ "Authorization" = "Bearer $TOKEN_B"; "Content-Type" = "application/json" } `      
+>>     -Body '{"title":"Hacked by B"}'
+>>   "❌ Unexpected: update succeeded"
+>> } catch {
+>>   $_.Exception.Response.StatusCode.value__
+>> }
+>>
+404
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> try {
+>>   Invoke-RestMethod `
+>>     -Method PATCH `
+>>     -Uri "http://127.0.0.1:8000/api/tasks/8/toggle" `
+>>     -Headers @{ "Authorization" = "Bearer $TOKEN_B" }
+>>   "❌ Unexpected: toggle succeeded"
+>> } catch {
+>>   $_.Exception.Response.StatusCode.value__
+>> }
+>>
+404
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> try {
+>>   Invoke-RestMethod `
+>>     -Method DELETE `
+>>     -Uri "http://127.0.0.1:8000/api/tasks/8" `
+>>     -Headers @{ "Authorization" = "Bearer $TOKEN_B" }
+>>   "❌ Unexpected: delete succeeded"
+>> } catch {
+>>   $_.Exception.Response.StatusCode.value__
+>> }
+>>
+404
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> Invoke-RestMethod `
+>>   -Method GET `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Headers @{ "Authorization" = "Bearer $TOKEN_A" }
+>>
+
+
+id           : 8
+user_id      : 9
+title        : A private task
+is_completed : False
+created_at   : 2026-01-09T00:29:17.656231
+updated_at   : 2026-01-09T00:29:17.656231
+
+
+
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> Invoke-RestMethod `
+>>   -Method GET `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Headers @{ "Authorization" = "Bearer $TOKEN_A" }
+>>
+
+
+id           : 8
+user_id      : 9
+title        : A private task
+is_completed : False
+created_at   : 2026-01-09T00:29:17.656231
+updated_at   : 2026-01-09T00:29:17.656231
+
+
+
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> Invoke-RestMethod `
+>>   -Method GET `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Headers @{ "Authorization" = "Bearer $TOKEN_B" }
+>>
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> $BTasks = Invoke-RestMethod `
+>>   -Method GET `
+>>   -Uri "http://127.0.0.1:8000/api/tasks" `
+>>   -Headers @{ "Authorization" = "Bearer $TOKEN_B" }
+>>
+>> $BTasks | ConvertTo-Json                           curl.exe -X GET "http://127.0.0.1:8000/api/health"
+>> D:\Shoaib Project\nimbus-tasks\phase2-backend\api>
+{"ok":true}
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api>

@@ -1,7 +1,17 @@
 from fastapi import APIRouter
+from pydantic import BaseModel
 
-router = APIRouter()
+router = APIRouter(tags=["health"])
 
-@router.get("/health")
+
+class HealthOut(BaseModel):
+    ok: bool
+
+
+@router.get("/health", response_model=HealthOut)
 def health():
+    """
+    Health check endpoint.
+    Used for liveness / sanity verification.
+    """
     return {"ok": True}
