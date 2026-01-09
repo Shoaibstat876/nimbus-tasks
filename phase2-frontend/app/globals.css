@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* App-wide base styling */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: white;
+}

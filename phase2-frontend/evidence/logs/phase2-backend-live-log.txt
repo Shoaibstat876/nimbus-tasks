@@ -1,0 +1,21 @@
+Nimbus Phase 2 – Backend Live Proof Log
+
+Server:
+uvicorn app.main:app --reload --port 8000 --env-file .env
+
+Key Requests Observed:
+
+GET /api/auth/me            → 200 OK
+GET /api/tasks              → 200 OK
+POST /api/tasks             → 201 Created
+PATCH /api/tasks/{id}/toggle→ 200 OK
+DELETE /api/tasks/{id}      → 204 No Content
+
+Observations:
+- JWT authentication validated via /me
+- Tasks are owner-scoped (owner-only isolation)
+- CRUD operations succeed
+- Data persists after refresh (Neon PostgreSQL)
+
+Conclusion:
+Backend correctly serves authenticated, owner-isolated CRUD operations.

@@ -1,0 +1,134 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260109024044
+Username: DESKTOP-AOVUMO3\Shoaib
+RunAs User: DESKTOP-AOVUMO3\Shoaib
+Configuration Name: 
+Machine: DESKTOP-AOVUMO3 (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -noexit -command try { . "c:\Users\Shoaib\AppData\Local\Programs\Microsoft VS Code\resources\app\out\vs\workbench\contrib\terminal\common\scripts\shellIntegration.ps1" } catch {}
+Process ID: 5860
+PSVersion: 5.1.26100.7462
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.7462
+BuildVersion: 10.0.26100.7462
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is .\evidence\logs\terminal-testing.txt
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>curl.exe http://127.0.0.1:8000/api/health
+{"ok":true}
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>$body = @{
+    username = "new_tester@example.com"
+    password = "star876"
+}
+$response = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/auth/login" -Method Post -Body $body
+$token = $response.access_token
+
+# Verify it worked by printing the token:
+$token
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4IiwiaWF0IjoxNzY3OTA4NDc4LCJleHAiOjE3Njc5OTQ4Nzh9.6UqzdBL3CdZJAZ8gDf8oemiMXes3Gq_5lCXhVErMdhY
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>curl.exe "http://127.0.0.1:8000/api/auth/me" -H "Authorization: Bearer $token"
+{"id":8,"email":"new_tester@example.com"}
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>$taskBody = @{ title = "Terminal Cleanup Test" } | ConvertTo-Json
+$created = curl.exe -s -X POST "http://127.0.0.1:8000/api/tasks" `
+  -H "Authorization: Bearer $token" `
+  -H "Content-Type: application/json" `
+  -d $taskBody
+
+# Print the result to see the Task ID
+$created
+{"detail":[{"type":"json_invalid","loc":["body",7],"msg":"JSON decode error","input":{},"ctx":{"error":"Expecting property name enclosed in double quotes"}}]}
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>$taskId = ($created | ConvertFrom-Json).id
+Write-Host "The new Task ID is: $taskId"
+The new Task ID is:
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>$taskBody = @{ title = "Terminal Cleanup Test" }
+$created = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/tasks" `
+  -Method Post `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json" `
+  -Body ($taskBody | ConvertTo-Json)
+
+# Now check the result
+$created
+
+
+id           : 7
+user_id      : 8
+title        : Terminal Cleanup Test
+is_completed : False
+created_at   : 2026-01-08T21:43:28.239192
+updated_at   : 2026-01-08T21:43:28.239192
+
+
+
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>$taskId = $created.id
+Write-Host "The new Task ID is: $taskId"
+The new Task ID is: 7
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>$updateBody = @{ title = "Updated via PowerShell" }
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/tasks/$taskId" `
+  -Method Put `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json" `
+  -Body ($updateBody | ConvertTo-Json)
+
+
+id           : 7
+user_id      : 8
+title        : Updated via PowerShell
+is_completed : False
+created_at   : 2026-01-08T21:43:28.239192
+updated_at   : 2026-01-08T21:44:04.703441
+
+
+
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/tasks/$taskId/toggle" `
+  -Method Patch `
+  -Headers @{ Authorization = "Bearer $token" }
+
+# Now list all tasks to see the updated status
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/tasks" `
+  -Method Get `
+  -Headers @{ Authorization = "Bearer $token" }
+
+
+id           : 7
+user_id      : 8
+title        : Updated via PowerShell
+is_completed : True
+created_at   : 2026-01-08T21:43:28.239192
+updated_at   : 2026-01-08T21:44:58.672974
+
+id           : 7
+user_id      : 8
+title        : Updated via PowerShell
+is_completed : True
+created_at   : 2026-01-08T21:43:28.239192
+updated_at   : 2026-01-08T21:44:58.672974
+
+
+
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/tasks/$taskId" `
+  -Method Delete `
+  -Headers @{ Authorization = "Bearer $token" }
+
+Write-Host "Task $taskId has been deleted."
+
+Task 7 has been deleted.
+]633;D;0]633;A]633;P;Cwd=D:\x5cShoaib Project\x5cnimbus-tasks\x5cphase2-backend\x5capiPS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> ]633;B
+PS>Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260109024533
+**********************
