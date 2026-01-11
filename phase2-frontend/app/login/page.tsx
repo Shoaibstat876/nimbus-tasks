@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, clearToken } from "../../lib/api";
+import { useRouter } from "next/navigation";
+import { api } from "../../lib/api"; // keep adapter (Law 8)
+import { clearToken, setToken } from "../../lib/services/auth"; // Token Authority (Law 3)
 
 type BannerType = "ok" | "warn" | "err" | "info";
 
@@ -20,6 +22,8 @@ function Banner({ type, text }: { type: BannerType; text: string }) {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("owner.a@test.com");
   const [password, setPassword] = useState("pass1234");
   const [busy, setBusy] = useState<"register" | "login" | null>(null);
@@ -29,7 +33,6 @@ export default function LoginPage() {
     text: "Demo-ready login. Register (optional) → Login → Verify /me.",
   });
 
-  // 🔍 Deployment sanity check (prevents panic)
   useEffect(() => {
     const apiBase =
       process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -74,14 +77,23 @@ export default function LoginPage() {
   async function onLogin() {
     setBusy("login");
     setBanner({ type: "info", text: "Logging in + verifying /me..." });
+
     try {
-      await api.login(email.trim(), password);
+      // ✅ Spec 010: login via API boundary
+      // ✅ Law 3: token storage only via auth.ts
+      const data = await api.login(email.trim(), password);
+      setToken(data.access_token);
+
       const me = await api.me();
+
       setBanner({
         type: "ok",
-        text: `Logged in as ${me.email} (id=${me.id}). Ownership gate ready.`,
+        text: `Logged in as ${me.email} (id=${me.id}). Redirecting to Tasks...`,
       });
+
+      router.push("/tasks");
     } catch (e: any) {
+      // ✅ Law 3: clearing token only via auth.ts (not via apiClient/logout)
       clearToken();
       setBanner({ type: "err", text: `Login failed: ${e.message}` });
     } finally {
@@ -91,7 +103,6 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Nimbus — Sign in</h2>
@@ -108,9 +119,7 @@ export default function LoginPage() {
 
       <Banner type={banner.type} text={banner.text} />
 
-      {/* Main layout */}
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Login card */}
         <div className="lg:col-span-3 rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2">
@@ -163,7 +172,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Proof panel */}
         <div className="lg:col-span-2 rounded-3xl border border-zinc-200 bg-zinc-50 p-6">
           <div className="text-sm font-semibold">Proof checklist</div>
           <ul className="mt-3 space-y-2 text-sm text-zinc-700">
