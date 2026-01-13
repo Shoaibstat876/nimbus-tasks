@@ -2,8 +2,9 @@
 
 from datetime import datetime, timezone
 from typing import Optional, List
+from uuid import UUID, uuid4
 
-from sqlalchemy import String
+from sqlalchemy import String, Text
 from sqlmodel import SQLModel, Field, Relationship, Column, DateTime
 
 
@@ -50,6 +51,47 @@ class Task(SQLModel, table=True):
     )
 
     user: Optional["User"] = Relationship(back_populates="tasks")
+
+
+class Conversation(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+
+    # Owner-only law: every conversation must have an owner (NOT optional)
+    user_id: int = Field(foreign_key="user.id", index=True, nullable=False)
+
+    # Optional title for conversation context
+    title: Optional[str] = Field(default=None, max_length=255, nullable=True)
+
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class Message(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+
+    # FK to conversation
+    conversation_id: UUID = Field(foreign_key="conversation.id", index=True, nullable=False)
+
+    # Owner-only law: every message must have an owner (NOT optional)
+    user_id: int = Field(foreign_key="user.id", index=True, nullable=False)
+
+    # Role: "user" or "assistant"
+    role: str = Field(max_length=20, index=True, nullable=False)
+
+    # Message content (can be large)
+    content: str = Field(sa_column=Column(Text, nullable=False))
+
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 # ============================================================
