@@ -39,3 +39,5 @@ terminal 3 or any paste it to check the health
 
 curl.exe -X GET "http://127.0.0.1:8000/api/health"
 
+tree: cd "D:\Shoaib Project\nimbus-tasks"
+git ls-files
