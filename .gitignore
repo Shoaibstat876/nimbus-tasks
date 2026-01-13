@@ -57,3 +57,5 @@ tests/test.db
 *.db
 *.sqlite
 *.sqlite3
+CURRENT-STATUS.md
+README_FIRST.md
