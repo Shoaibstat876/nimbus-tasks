@@ -1,6 +1,6 @@
 # app/routes/chat.py
 
-from typing import Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +9,7 @@ from sqlmodel import Session
 
 from ..database import get_session
 from ..models import User
-from ..services import chat_repo
+from ..services import chat_repo, chat_agent
 from .auth_routes import get_current_user
 
 
@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     conversation_id: UUID
     response: str
-    role: str = "assistant"
+    tool_calls: List[dict] = []
 
 
 # ============================================================
@@ -44,10 +44,12 @@ def chat_endpoint(
     """
     Chat endpoint with stateless, owner-only conversation persistence.
 
-    - If conversation_id is null/omitted: creates new conversation
-    - If conversation_id is provided: verifies ownership and continues conversation
-    - Stores user message in DB
-    - Returns placeholder response (agent integration pending)
+    Phase III Implementation:
+    - Stateless: loads last N messages from DB on every request
+    - Owner-only: enforces JWT-based user_id for all operations
+    - Identity injection: injects auth user_id into tool calls (never trusts AI)
+    - Tool calling: uses MCP tools for task management
+    - Persistence: stores both user and assistant messages to DB
 
     Args:
         payload: ChatRequest with optional conversation_id and message
@@ -55,7 +57,7 @@ def chat_endpoint(
         current_user: Authenticated user (injected via JWT)
 
     Returns:
-        ChatResponse with conversation_id and assistant response
+        ChatResponse with conversation_id, assistant response, and tool call logs
 
     Raises:
         HTTPException 404: Conversation not found or not owned by user
@@ -109,18 +111,31 @@ def chat_endpoint(
         )
 
     # ============================================================
-    # PLACEHOLDER RESPONSE (Agent integration pending)
+    # RUN AI AGENT (Stateless with Identity Injection)
     # ============================================================
 
-    placeholder_response = f"ACK: {payload.message}"
+    try:
+        assistant_response, tool_call_logs = chat_agent.run_agent(
+            session=session,
+            conversation_id=conversation_id,
+            user_id=current_user.id,  # Identity injection from JWT
+            user_message=payload.message,
+        )
+    except Exception as e:
+        # Log error and return graceful fallback
+        assistant_response = f"I apologize, but I encountered an error: {str(e)}"
+        tool_call_logs = []
 
-    # Store assistant response in DB
+    # ============================================================
+    # STORE ASSISTANT RESPONSE IN DB
+    # ============================================================
+
     assistant_message = chat_repo.add_message(
         session=session,
         conversation_id=conversation_id,
         user_id=current_user.id,
         role="assistant",
-        content=placeholder_response,
+        content=assistant_response,
     )
 
     if not assistant_message:
@@ -135,6 +150,6 @@ def chat_endpoint(
 
     return ChatResponse(
         conversation_id=conversation_id,
-        response=placeholder_response,
-        role="assistant",
+        response=assistant_response,
+        tool_calls=tool_call_logs,
     )
