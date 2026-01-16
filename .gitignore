@@ -59,3 +59,7 @@ tests/test.db
 *.sqlite3
 CURRENT-STATUS.md
 README_FIRST.md
+
+# local evidence folders
+evidence-3/
+
