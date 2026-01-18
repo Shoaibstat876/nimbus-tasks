@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
-import { clearToken } from "../../lib/services/auth"; // Token Authority (Law 3)
+import { clearToken, getToken } from "../../lib/services/auth"; // Token Authority (Law 3)
+import { AIFloat } from "../components/AIFloat";
 
 type Task = {
   id: number;
@@ -87,8 +87,9 @@ export default function TasksPage() {
     clearToken();
     setMe(null);
     setTasks([]);
+    setErrorMsg(null);
     setStatus(message);
-    router.push("/login");
+    router.replace("/login"); // prevent back-button confusion
   }
 
   function showNotFoundStyle(message: string) {
@@ -103,6 +104,14 @@ export default function TasksPage() {
     setBusyGlobal("refresh");
     setStatus("Loading /me + tasks...");
     setErrorMsg(null);
+
+    // ✅ Guard: no token → redirect immediately
+    if (!getToken()) {
+      redirectToLogin("Please login to continue.");
+      setInitialLoading(false);
+      setBusyGlobal(null);
+      return;
+    }
 
     try {
       const who = await api.me();
@@ -195,9 +204,7 @@ export default function TasksPage() {
     setErrorMsg(null);
 
     try {
-      // ✅ Spec 020: update task title
-      await (api as any).updateTask?.(id, editTitle.trim());
-      // If updateTask is missing in apiClient, this will be caught and shown as error
+      await api.updateTask(id, editTitle.trim());
       cancelEdit();
       setStatus("Saved. Refreshing...");
       await refresh();
@@ -217,8 +224,9 @@ export default function TasksPage() {
     setStatus("Toggling...");
     setErrorMsg(null);
 
-    // optimistic UI (still safe because we refresh)
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t)));
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t))
+    );
 
     try {
       await api.toggleTask(id);
@@ -261,49 +269,29 @@ export default function TasksPage() {
     }
   }
 
-  function logout() {
-    // ✅ Spec 010: logout clears token and returns to login
-    redirectToLogin("Logged out. Please login again.");
-  }
-
   const isDisabled = busyGlobal !== null || busyTaskId !== null;
+
+  // ✅ If not authed and not loading, we should already be redirecting.
+  if (!initialLoading && !me) return null;
 
   return (
     <main className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Tasks</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            This page proves: <span className="font-semibold">CRUD</span> +{" "}
-            <span className="font-semibold">owner-only isolation</span>.
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <Link
-            href="/"
-            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50"
-          >
-            Home
-          </Link>
-          <Link
-            href="/login"
-            className="rounded-2xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-800"
-          >
-            Login
-          </Link>
-        </div>
+      {/* ✅ No local nav here (layout owns global nav + logout) */}
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight">Tasks</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          This page proves: <span className="font-semibold">CRUD</span> +{" "}
+          <span className="font-semibold">owner-only isolation</span>.
+        </p>
       </div>
 
       <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4">
-        {/* Loading (Law 5) */}
         {initialLoading ? (
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-6 text-sm text-zinc-700">
             Loading tasks...
           </div>
         ) : null}
 
-        {/* Error (Law 5) */}
         {errorMsg ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
             <div className="font-medium">Something went wrong</div>
@@ -323,7 +311,7 @@ export default function TasksPage() {
             <div className="text-sm text-zinc-600">
               Signed in:{" "}
               <span className="font-semibold text-zinc-900">
-                {me ? `${me.email} (id=${me.id})` : "Not logged in"}
+                {me ? `${me.email} (id=${me.id})` : "—"}
               </span>
             </div>
 
@@ -342,13 +330,6 @@ export default function TasksPage() {
             >
               {busyGlobal === "refresh" ? "Refreshing..." : "Refresh"}
             </button>
-            <button
-              onClick={logout}
-              disabled={isDisabled}
-              className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
-            >
-              Logout
-            </button>
           </div>
         </div>
 
@@ -356,7 +337,6 @@ export default function TasksPage() {
           Status: <span className="font-medium">{status}</span>
         </div>
 
-        {/* Create (Law 6 + 030) */}
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
@@ -384,7 +364,6 @@ export default function TasksPage() {
           {titleError ? <div className="text-sm text-rose-700">{titleError}</div> : null}
         </div>
 
-        {/* Empty (Law 5) */}
         <div className="overflow-hidden rounded-3xl border border-zinc-200">
           {tasks.length === 0 ? (
             <div className="p-8 text-sm text-zinc-600">
@@ -416,7 +395,9 @@ export default function TasksPage() {
                               disabled={isDisabled}
                               className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
                             />
-                            {editError ? <div className="text-sm text-rose-700">{editError}</div> : null}
+                            {editError ? (
+                              <div className="text-sm text-rose-700">{editError}</div>
+                            ) : null}
                           </div>
                         ) : (
                           <div className="font-semibold truncate">{t.title}</div>
@@ -477,6 +458,8 @@ export default function TasksPage() {
           )}
         </div>
       </div>
+      <AIFloat />
+
     </main>
   );
 }

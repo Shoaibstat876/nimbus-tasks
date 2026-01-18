@@ -17,10 +17,17 @@ export class ApiError extends Error {
 function buildError(status: number, text: string, fallback: string) {
   try {
     const parsed = text ? JSON.parse(text) : null;
-    if (parsed?.detail) return new ApiError(status, `${status} ${parsed.detail}`, text);
+
+    // FastAPI often uses { detail: "..." }, but sometimes detail can be list/dict
+    if (parsed && "detail" in parsed) {
+      const d = (parsed as any).detail;
+      const detailText = typeof d === "string" ? d : JSON.stringify(d);
+      return new ApiError(status, `${status} ${detailText}`, text);
+    }
   } catch {
     // ignore JSON parse
   }
+
   return new ApiError(status, `${status} ${text || fallback || "Request failed"}`, text);
 }
 
@@ -72,6 +79,23 @@ export type TaskDTO = {
   updated_at?: string;
 };
 
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
+export type ChatResponse = {
+  conversation_id: string;
+  response: string;
+  tool_calls?: unknown[]; // keep optional to avoid breaking existing UI
+};
+
+export type ChatHistoryResponse = {
+  conversation_id: string;
+  messages: ChatMessage[];
+};
+
 export const apiClient = {
   // Auth (NO token writes here — Law 3)
   register(email: string, password: string) {
@@ -90,7 +114,7 @@ export const apiClient = {
     return request<{ access_token: string; token_type: string }>(`/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body, // URLSearchParams is acceptable; Content-Type already set
+      body,
     });
   },
 
@@ -123,5 +147,20 @@ export const apiClient = {
 
   deleteTask(id: number) {
     return request<void>(`/api/tasks/${id}`, { method: "DELETE" });
+  },
+
+  // Chat
+  sendChatMessage(message: string, conversationId?: string) {
+    return request<ChatResponse>(`/api/chat`, {
+      method: "POST",
+      body: JSON.stringify({
+        message,
+        conversation_id: conversationId || undefined,
+      }),
+    });
+  },
+
+  getChatHistory(conversationId: string) {
+    return request<ChatHistoryResponse>(`/api/chat/history/${conversationId}`);
   },
 };
