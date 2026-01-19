@@ -20,6 +20,8 @@ from .auth_routes import get_current_user
 class ChatRequest(BaseModel):
     conversation_id: Optional[UUID] = None
     message: str
+    language: Optional[str] = None  # "en" | "ur"
+
 
 
 class ChatResponse(BaseModel):
@@ -115,12 +117,14 @@ def chat_endpoint(
     # ============================================================
 
     try:
-        assistant_response, tool_call_logs = chat_agent.run_agent(
-            session=session,
-            conversation_id=conversation_id,
-            user_id=current_user.id,  # Identity injection from JWT
-            user_message=payload.message,
-        )
+      assistant_response, tool_call_logs = chat_agent.run_agent(
+        session=session,
+        conversation_id=conversation_id,
+        user_id=current_user.id,  # Identity injection from JWT
+        user_message=payload.message,
+        preferred_language=payload.language,
+    )
+
     except Exception as e:
         # Log error and return graceful fallback
         assistant_response = f"I apologize, but I encountered an error: {str(e)}"

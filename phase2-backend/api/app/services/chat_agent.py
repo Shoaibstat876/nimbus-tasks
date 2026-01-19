@@ -2,15 +2,21 @@
 
 """
 Stateless AI Agent for Phase III Chat
-- Uses OpenAI Agents SDK with MCP tool integration
+- Uses OpenAI SDK tool calling with MCP tool integration
 - Loads conversation history from DB (stateless)
 - Implements identity injection for user_id
 - No in-memory state between requests
+
+Safe additive hybrid:
+- Optional preferred_language ("en"|"ur") accepted by run_agent (defaults to English)
+- Heuristic Urdu detection if preferred_language missing (handled in language_router_skill)
+- Intent hint (add/list/complete/update/delete) used only as prompt steering (NO behavior change)
+- Reusable Intelligence: skills/ modules used (language_router_skill + task_intent_skill)
 """
 
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 from uuid import UUID
 
 from openai import OpenAI
@@ -32,25 +38,25 @@ from ..mcp_tools.schemas import (
     DeleteTaskInput,
 )
 
+# Reusable Intelligence (skills)
+from .skills.language_router_skill import resolve_language
+from .skills.task_intent_skill import detect_intent
+
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
-# Maximum conversation history to load (prevent context overflow)
 MAX_HISTORY_MESSAGES = 50
 
-# AI Model configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is required in .env")
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 
-# Initialize OpenAI client
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# System prompt for the agent
 SYSTEM_PROMPT = """You are a helpful task management assistant. You can help users:
 - Create tasks (add_task)
 - List tasks with status filters (list_tasks)
@@ -73,13 +79,37 @@ Be concise and helpful."""
 
 
 # ============================================================
-# TOOL DEFINITIONS (for OpenAI function calling)
+# SAFE ADDITIVE PROMPT STEERING (uses reusable skills)
+# ============================================================
+
+def build_system_prompt(preferred_language: Optional[str], user_message: str) -> str:
+    """
+    Language-aware system prompt that does NOT change tool behavior.
+    Only affects the language of assistant responses.
+    """
+    lang = resolve_language(preferred_language, user_message)
+    intent = detect_intent(user_message)
+
+    if lang == "ur":
+        return (
+            SYSTEM_PROMPT
+            + "\n\nLANGUAGE MODE: Urdu\n"
+            + "You MUST respond in Urdu. Tool names/arguments remain unchanged.\n"
+            + f"Intent hint (optional): {intent}\n"
+        )
+
+    return (
+        SYSTEM_PROMPT
+        + "\n\nLANGUAGE MODE: English\n"
+        + f"Intent hint (optional): {intent}\n"
+    )
+
+
+# ============================================================
+# TOOL DEFINITIONS
 # ============================================================
 
 def get_tool_definitions() -> List[Dict[str, Any]]:
-    """
-    Return tool definitions in OpenAI function calling format.
-    """
     return [
         {
             "type": "function",
@@ -89,10 +119,7 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "title": {
-                            "type": "string",
-                            "description": "Task title (max 80 characters)",
-                        },
+                        "title": {"type": "string", "description": "Task title (max 80 characters)"},
                     },
                     "required": ["title"],
                 },
@@ -123,10 +150,7 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "task_id": {
-                            "type": "integer",
-                            "description": "Task ID to complete",
-                        },
+                        "task_id": {"type": "integer", "description": "Task ID to complete"},
                     },
                     "required": ["task_id"],
                 },
@@ -140,14 +164,8 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "task_id": {
-                            "type": "integer",
-                            "description": "Task ID to update",
-                        },
-                        "title": {
-                            "type": "string",
-                            "description": "New task title (max 80 characters)",
-                        },
+                        "task_id": {"type": "integer", "description": "Task ID to update"},
+                        "title": {"type": "string", "description": "New task title (max 80 characters)"},
                     },
                     "required": ["task_id", "title"],
                 },
@@ -161,14 +179,8 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "task_id": {
-                            "type": "integer",
-                            "description": "Task ID to delete",
-                        },
-                        "confirm": {
-                            "type": "boolean",
-                            "description": "Confirmation flag (must be true)",
-                        },
+                        "task_id": {"type": "integer", "description": "Task ID to delete"},
+                        "confirm": {"type": "boolean", "description": "Confirmation flag (must be true)"},
                     },
                     "required": ["task_id", "confirm"],
                 },
@@ -178,50 +190,26 @@ def get_tool_definitions() -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# TOOL EXECUTION (with Identity Injection)
+# TOOL EXECUTION (Identity Injection)
 # ============================================================
 
-def execute_tool(
-    tool_name: str,
-    tool_args: Dict[str, Any],
-    user_id: int,
-) -> Dict[str, Any]:
+def execute_tool(tool_name: str, tool_args: Dict[str, Any], user_id: int) -> Dict[str, Any]:
     """
-    Execute a tool with identity injection.
-
-    CRITICAL: user_id is derived from JWT by the backend, never from AI.
-
-    Args:
-        tool_name: Name of the tool to execute
-        tool_args: Arguments provided by the AI
-        user_id: Authenticated user ID (injected by backend)
-
-    Returns:
-        Tool execution result as dict
+    CRITICAL: user_id is derived from JWT by backend, never from AI.
     """
-    # Inject user_id into all tool calls
     user_id_str = str(user_id)
 
     try:
         if tool_name == "add_task":
-            input_data = AddTaskInput(
-                user_id=user_id_str,
-                title=tool_args.get("title", ""),
-            )
+            input_data = AddTaskInput(user_id=user_id_str, title=tool_args.get("title", ""))
             result = add_task_tool(input_data)
 
         elif tool_name == "list_tasks":
-            input_data = ListTasksInput(
-                user_id=user_id_str,
-                status=tool_args.get("status", "all"),
-            )
+            input_data = ListTasksInput(user_id=user_id_str, status=tool_args.get("status", "all"))
             result = list_tasks_tool(input_data)
 
         elif tool_name == "complete_task":
-            input_data = CompleteTaskInput(
-                user_id=user_id_str,
-                task_id=tool_args.get("task_id"),
-            )
+            input_data = CompleteTaskInput(user_id=user_id_str, task_id=tool_args.get("task_id"))
             result = complete_task_tool(input_data)
 
         elif tool_name == "update_task":
@@ -241,56 +229,28 @@ def execute_tool(
             result = delete_task_tool(input_data)
 
         else:
-            return {
-                "ok": False,
-                "message": f"Unknown tool: {tool_name}",
-                "data": None,
-            }
+            return {"ok": False, "message": f"Unknown tool: {tool_name}", "data": None}
 
         return result.model_dump()
 
     except Exception as e:
-        return {
-            "ok": False,
-            "message": f"Tool execution error: {str(e)}",
-            "data": None,
-        }
+        return {"ok": False, "message": f"Tool execution error: {str(e)}", "data": None}
 
 
 # ============================================================
-# CONVERSATION HISTORY LOADING
+# CONVERSATION HISTORY
 # ============================================================
 
-def load_conversation_history(
-    session: Session,
-    conversation_id: UUID,
-    user_id: int,
-) -> List[Dict[str, str]]:
-    """
-    Load conversation history from DB (stateless).
-
-    Args:
-        session: Database session
-        conversation_id: Conversation UUID
-        user_id: Owner user ID
-
-    Returns:
-        List of message dicts in OpenAI format [{"role": "user/assistant", "content": "..."}]
-    """
+def load_conversation_history(session: Session, conversation_id: UUID, user_id: int) -> List[Dict[str, str]]:
     messages = chat_repo.list_messages_for_conversation(
         session=session,
         conversation_id=conversation_id,
         user_id=user_id,
     )
 
-    # Take last N messages to avoid context overflow
     messages = messages[-MAX_HISTORY_MESSAGES:]
 
-    # Convert to OpenAI format
-    return [
-        {"role": msg.role, "content": msg.content}
-        for msg in messages
-    ]
+    return [{"role": msg.role, "content": msg.content} for msg in messages]
 
 
 # ============================================================
@@ -302,47 +262,28 @@ def run_agent(
     conversation_id: UUID,
     user_id: int,
     user_message: str,
+    preferred_language: Optional[str] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Run the stateless AI agent using OpenAI Agents SDK.
-
-    Workflow:
-    1. Load conversation history from DB
-    2. Append new user message
-    3. Call OpenAI with tools
-    4. Execute tools if requested (with identity injection)
-    5. Return final response
-
-    Args:
-        session: Database session
-        conversation_id: Conversation UUID
-        user_id: Authenticated user ID (from JWT)
-        user_message: User's message
-
-    Returns:
-        Tuple of (assistant_response, tool_call_logs)
+    preferred_language:
+      Optional "en" | "ur" (safe additive). If missing, fallback uses skill heuristic.
     """
-    # Load conversation history
     history = load_conversation_history(session, conversation_id, user_id)
 
-    # Build messages for AI
+    system_prompt = build_system_prompt(preferred_language, user_message)
+
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         *history,
         {"role": "user", "content": user_message},
     ]
 
-    # Get tool definitions
     tools = get_tool_definitions()
-
-    # Tool call logs for debugging/transparency
     tool_call_logs: List[Dict[str, Any]] = []
 
-    # Multi-turn tool calling loop (max 5 iterations to prevent infinite loops)
     max_iterations = 5
 
-    for iteration in range(max_iterations):
-        # Call OpenAI API
+    for _ in range(max_iterations):
         response = openai_client.chat.completions.create(
             model=AI_MODEL,
             messages=messages,
@@ -352,51 +293,41 @@ def run_agent(
 
         assistant_message = response.choices[0].message
 
-        # Check if AI wants to call tools
         if not assistant_message.tool_calls:
-            # No tool calls - return final response
-            final_content = assistant_message.content or ""
-            return final_content, tool_call_logs
+            return (assistant_message.content or ""), tool_call_logs
 
-        # AI wants to call tools
-        # Add assistant message to history
-        messages.append({
-            "role": "assistant",
-            "content": assistant_message.content,
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in assistant_message.tool_calls
-            ],
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in assistant_message.tool_calls
+                ],
+            }
+        )
 
-        # Execute each tool call
         for tool_call in assistant_message.tool_calls:
             tool_name = tool_call.function.name
             tool_args = json.loads(tool_call.function.arguments)
 
-            # Execute tool with identity injection
             tool_result = execute_tool(tool_name, tool_args, user_id)
 
-            # Log tool call for transparency
-            tool_call_logs.append({
-                "tool": tool_name,
-                "args": tool_args,
-                "result": tool_result,
-            })
+            tool_call_logs.append({"tool": tool_name, "args": tool_args, "result": tool_result})
 
-            # Add tool result to messages
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": json.dumps(tool_result),
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(tool_result),
+                }
+            )
 
-    # If we hit max iterations, return a message
-    return "I apologize, but I encountered too many tool calls. Please try rephrasing your request.", tool_call_logs
+    return (
+        "I apologize, but I encountered too many tool calls. Please try rephrasing your request.",
+        tool_call_logs,
+    )
