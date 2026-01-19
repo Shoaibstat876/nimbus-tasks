@@ -1,6 +1,7 @@
 import { getToken } from "./auth";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").trim();
+const API_BASE_RAW = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").trim();
+const API_BASE = API_BASE_RAW.endsWith("/") ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -14,21 +15,26 @@ export class ApiError extends Error {
   }
 }
 
-function buildError(status: number, text: string, fallback: string) {
+function safeJsonParse(text: string): unknown {
   try {
-    const parsed = text ? JSON.parse(text) : null;
-
-    // FastAPI often uses { detail: "..." }, but sometimes detail can be list/dict
-    if (parsed && "detail" in parsed) {
-      const d = (parsed as any).detail;
-      const detailText = typeof d === "string" ? d : JSON.stringify(d);
-      return new ApiError(status, `${status} ${detailText}`, text);
-    }
+    return text ? JSON.parse(text) : null;
   } catch {
-    // ignore JSON parse
+    return null;
+  }
+}
+
+function buildError(status: number, text: string, fallback: string) {
+  const parsed = safeJsonParse(text);
+
+  // FastAPI often returns { detail: "..." } (but detail can be any JSON)
+  if (parsed && typeof parsed === "object" && "detail" in parsed) {
+    const detail = (parsed as { detail?: unknown }).detail;
+    const detailText = typeof detail === "string" ? detail : JSON.stringify(detail);
+    return new ApiError(status, `${status} ${detailText}`, text);
   }
 
-  return new ApiError(status, `${status} ${text || fallback || "Request failed"}`, text);
+  const msg = text || fallback || "Request failed";
+  return new ApiError(status, `${status} ${msg}`, text);
 }
 
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
@@ -38,7 +44,7 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
     ...(opts.headers as Record<string, string> | undefined),
   };
 
-  // Default JSON when body exists, unless Content-Type is already provided
+  // Default JSON when body exists (unless FormData or Content-Type already set)
   if (!headers["Content-Type"] && opts.body && !(opts.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
@@ -66,8 +72,8 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
     return JSON.parse(raw) as T;
   }
 
-  // If backend returns non-JSON on a success endpoint we expect JSON from,
-  // return undefined rather than crashing.
+  // Spec-Kit safety: if a "JSON expected" endpoint returns non-JSON,
+  // we keep old behavior (return undefined) to avoid breaking UI.
   return undefined as unknown as T;
 }
 
@@ -88,7 +94,7 @@ export type ChatMessage = {
 export type ChatResponse = {
   conversation_id: string;
   response: string;
-  tool_calls?: unknown[]; // keep optional to avoid breaking existing UI
+  tool_calls?: unknown[]; // intentionally loose
 };
 
 export type ChatHistoryResponse = {

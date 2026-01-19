@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Role = "user" | "assistant";
 
@@ -28,10 +34,7 @@ type Props = {
   examples?: string[];
   placeholder?: string;
 
-  // Load messages when modal opens (history + conversation id)
   onLoadHistory: () => Promise<HistoryResult>;
-
-  // Send a message (returns new/continued conversation id + reply)
   onSend: (message: string, conversationId?: string) => Promise<SendResult>;
 };
 
@@ -60,36 +63,46 @@ export default function NimbusAssistantModal({
 
   const canSend = useMemo(() => text.trim().length > 0 && !busy, [text, busy]);
 
-  // Load history when opened
+  // Load history when modal opens
   useEffect(() => {
     if (!open) return;
 
-    setBusy(true);
-    setError(null);
+    let alive = true;
 
-    (async () => {
+    async function load() {
+      setBusy(true);
+      setError(null);
+
       try {
         const hist = await onLoadHistory();
+        if (!alive) return;
         setConversationId(hist.conversationId);
         setMessages(hist.messages ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        if (!alive) return;
+        setError(String(e));
         setConversationId(null);
         setMessages([]);
       } finally {
+        if (!alive) return;
         setBusy(false);
         setTimeout(() => inputRef.current?.focus(), 0);
       }
-    })();
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
   }, [open, onLoadHistory]);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll
   useEffect(() => {
     if (!open) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  async function send() {
+  const send = useCallback(async () => {
     const msg = text.trim();
     if (!msg || busy) return;
 
@@ -97,25 +110,30 @@ export default function NimbusAssistantModal({
     setBusy(true);
     setError(null);
 
-    // optimistic user message
     setMessages((prev) => [...prev, { role: "user", content: msg }]);
 
     try {
       const res = await onSend(msg, conversationId ?? undefined);
       setConversationId(res.conversationId);
-      setMessages((prev) => [...prev, { role: "assistant", content: res.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: res.reply },
+      ]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(String(e));
     } finally {
       setBusy(false);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
-  }
+  }, [text, busy, conversationId, onSend]);
 
-  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") send();
-    if (e.key === "Escape") onClose();
-  }
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") send();
+      if (e.key === "Escape") onClose();
+    },
+    [send, onClose]
+  );
 
   if (!open) return null;
 
@@ -125,7 +143,11 @@ export default function NimbusAssistantModal({
       role="dialog"
       aria-modal="true"
     >
-      <button className="absolute inset-0 bg-black/40" onClick={onClose} aria-label="Close" />
+      <button
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        aria-label="Close"
+      />
 
       <div className="relative w-[92vw] max-w-md rounded-2xl bg-white shadow-xl border">
         {/* Header */}
@@ -148,7 +170,6 @@ export default function NimbusAssistantModal({
 
         {/* Body */}
         <div className="px-4 py-3 space-y-3">
-          {/* Help text */}
           <div className="text-sm text-zinc-600">
             Ask anything about your Nimbus tasks. Try:
             <ul className="mt-2 list-disc pl-5 space-y-1">
@@ -160,33 +181,36 @@ export default function NimbusAssistantModal({
             </ul>
           </div>
 
-          {/* Error */}
           {error ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
               {error}
             </div>
           ) : null}
 
-          {/* Messages */}
           <div className="max-h-64 overflow-auto rounded-xl border bg-zinc-50 p-3 space-y-2">
             {busy && messages.length === 0 ? (
               <div className="text-sm text-zinc-600">Loading...</div>
             ) : null}
 
             {!busy && messages.length === 0 ? (
-              <div className="text-sm text-zinc-600">No messages yet. Say hello.</div>
+              <div className="text-sm text-zinc-600">
+                No messages yet. Say hello.
+              </div>
             ) : null}
 
             {messages.map((m, i) => (
               <div key={i} className="rounded-lg border bg-white px-3 py-2">
-                <div className="text-xs font-semibold text-zinc-500">{m.role}</div>
-                <div className="text-sm text-zinc-900 whitespace-pre-wrap">{m.content}</div>
+                <div className="text-xs font-semibold text-zinc-500">
+                  {m.role}
+                </div>
+                <div className="text-sm text-zinc-900 whitespace-pre-wrap">
+                  {m.content}
+                </div>
               </div>
             ))}
             <div ref={bottomRef} />
           </div>
 
-          {/* Input + button */}
           <div>
             <input
               ref={inputRef}

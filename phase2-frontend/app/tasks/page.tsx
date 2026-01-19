@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
 import { clearToken, getToken } from "../../lib/services/auth"; // Token Authority (Law 3)
@@ -14,6 +14,8 @@ type Task = {
 
 type Me = { id: number; email: string };
 
+type BusyGlobal = "refresh" | "add" | "save" | null;
+
 function Badge({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-700">
@@ -26,7 +28,7 @@ const TITLE_MAX = 80;
 
 function getStatus(e: unknown): number | null {
   if (typeof e === "object" && e !== null && "status" in e) {
-    const v = (e as any).status;
+    const v = (e as { status?: unknown }).status;
     return typeof v === "number" ? v : null;
   }
   // fallback: try parse "401 ..." style messages (legacy)
@@ -38,7 +40,7 @@ function getStatus(e: unknown): number | null {
   return null;
 }
 
-function niceError(e: unknown) {
+function niceError(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
   try {
@@ -46,6 +48,13 @@ function niceError(e: unknown) {
   } catch {
     return "Unknown error";
   }
+}
+
+function validateTitle(raw: string): string | null {
+  const cleaned = raw.trim();
+  if (!cleaned) return "Title is required.";
+  if (cleaned.length > TITLE_MAX) return `Title too long (max ${TITLE_MAX} characters).`;
+  return null;
 }
 
 export default function TasksPage() {
@@ -69,38 +78,34 @@ export default function TasksPage() {
   const [status, setStatus] = useState("Ready");
 
   // Busy states
-  const [busyGlobal, setBusyGlobal] = useState<"refresh" | "add" | "save" | null>(null);
+  const [busyGlobal, setBusyGlobal] = useState<BusyGlobal>(null);
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
 
   const completedCount = useMemo(() => tasks.filter((t) => t.is_completed).length, [tasks]);
   const pendingCount = useMemo(() => tasks.length - completedCount, [tasks]);
 
-  function validateTitle(raw: string): string | null {
-    const cleaned = raw.trim();
-    if (!cleaned) return "Title is required.";
-    if (cleaned.length > TITLE_MAX) return `Title too long (max ${TITLE_MAX} characters).`;
-    return null;
-  }
+  const redirectToLogin = useCallback(
+    (message: string) => {
+      // ✅ Law 3: only auth.ts clears token
+      clearToken();
+      setMe(null);
+      setTasks([]);
+      setErrorMsg(null);
+      setStatus(message);
+      router.replace("/login"); // prevent back-button confusion
+    },
+    [router]
+  );
 
-  function redirectToLogin(message: string) {
-    // ✅ Law 3: only auth.ts clears token
-    clearToken();
-    setMe(null);
-    setTasks([]);
-    setErrorMsg(null);
-    setStatus(message);
-    router.replace("/login"); // prevent back-button confusion
-  }
-
-  function showNotFoundStyle(message: string) {
-    // ✅ Law 4: do not leak whether task exists or is owned
+  const showNotFoundStyle = useCallback((message: string) => {
+    // ✅ Law 4: do not leak whether resource exists or is owned
     setMe(null);
     setTasks([]);
     setErrorMsg(message);
     setStatus("Not found");
-  }
+  }, []);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setBusyGlobal("refresh");
     setStatus("Loading /me + tasks...");
     setErrorMsg(null);
@@ -146,14 +151,13 @@ export default function TasksPage() {
       setBusyGlobal(null);
       setInitialLoading(false);
     }
-  }
+  }, [redirectToLogin, showNotFoundStyle]);
 
   useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void refresh();
+  }, [refresh]);
 
-  async function addTask() {
+  const addTask = useCallback(async () => {
     const err = validateTitle(title);
     setTitleError(err);
     if (err) {
@@ -180,94 +184,107 @@ export default function TasksPage() {
     } finally {
       setBusyGlobal(null);
     }
-  }
+  }, [title, refresh, redirectToLogin, showNotFoundStyle]);
 
-  function startEdit(t: Task) {
+  const startEdit = useCallback((t: Task) => {
     setEditingId(t.id);
     setEditTitle(t.title);
     setEditError(null);
-  }
+  }, []);
 
-  function cancelEdit() {
+  const cancelEdit = useCallback(() => {
     setEditingId(null);
     setEditTitle("");
     setEditError(null);
-  }
+  }, []);
 
-  async function saveEdit(id: number) {
-    const err = validateTitle(editTitle);
-    setEditError(err);
-    if (err) return;
+  const saveEdit = useCallback(
+    async (id: number) => {
+      const err = validateTitle(editTitle);
+      setEditError(err);
+      if (err) return;
 
-    setBusyGlobal("save");
-    setStatus("Saving...");
-    setErrorMsg(null);
+      setBusyGlobal("save");
+      setStatus("Saving...");
+      setErrorMsg(null);
 
-    try {
-      await api.updateTask(id, editTitle.trim());
-      cancelEdit();
-      setStatus("Saved. Refreshing...");
-      await refresh();
-    } catch (e) {
-      const st = getStatus(e);
-      if (st === 401) return redirectToLogin("Session expired. Redirecting to login...");
-      if (st === 403 || st === 404) return showNotFoundStyle("This action is not available.");
-      setErrorMsg(`Update failed. ${niceError(e)}`);
-      setStatus("Error");
-    } finally {
-      setBusyGlobal(null);
-    }
-  }
+      try {
+        await api.updateTask(id, editTitle.trim());
+        cancelEdit();
+        setStatus("Saved. Refreshing...");
+        await refresh();
+      } catch (e) {
+        const st = getStatus(e);
+        if (st === 401) return redirectToLogin("Session expired. Redirecting to login...");
+        if (st === 403 || st === 404) return showNotFoundStyle("This action is not available.");
+        setErrorMsg(`Update failed. ${niceError(e)}`);
+        setStatus("Error");
+      } finally {
+        setBusyGlobal(null);
+      }
+    },
+    [editTitle, cancelEdit, refresh, redirectToLogin, showNotFoundStyle]
+  );
 
-  async function toggleTask(id: number) {
-    setBusyTaskId(id);
-    setStatus("Toggling...");
-    setErrorMsg(null);
+  const toggleTask = useCallback(
+    async (id: number) => {
+      setBusyTaskId(id);
+      setStatus("Toggling...");
+      setErrorMsg(null);
 
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t))
-    );
+      // optimistic UI
+      setTasks((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t))
+      );
 
-    try {
-      await api.toggleTask(id);
-      setStatus("Toggled. Refreshing...");
-      await refresh();
-    } catch (e) {
-      const st = getStatus(e);
-      if (st === 401) return redirectToLogin("Session expired. Redirecting to login...");
-      if (st === 403 || st === 404) return showNotFoundStyle("This action is not available.");
-      setErrorMsg(`Toggle failed. ${niceError(e)}`);
-      setStatus("Error");
-      await refresh();
-    } finally {
-      setBusyTaskId(null);
-    }
-  }
+      try {
+        await api.toggleTask(id);
+        setStatus("Toggled. Refreshing...");
+        await refresh();
+      } catch (e) {
+        const st = getStatus(e);
+        if (st === 401) return redirectToLogin("Session expired. Redirecting to login...");
+        if (st === 403 || st === 404) return showNotFoundStyle("This action is not available.");
+        setErrorMsg(`Toggle failed. ${niceError(e)}`);
+        setStatus("Error");
+        await refresh();
+      } finally {
+        setBusyTaskId(null);
+      }
+    },
+    [refresh, redirectToLogin, showNotFoundStyle]
+  );
 
-  async function deleteTask(id: number) {
-    setBusyTaskId(id);
-    setStatus("Deleting...");
-    setErrorMsg(null);
+  const deleteTask = useCallback(
+    async (id: number) => {
+      setBusyTaskId(id);
+      setStatus("Deleting...");
+      setErrorMsg(null);
 
-    const before = tasks;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+      // capture snapshot for rollback
+      const before = tasks;
 
-    try {
-      await api.deleteTask(id);
-      setStatus("Deleted. Refreshing...");
-      await refresh();
-    } catch (e) {
-      const st = getStatus(e);
-      if (st === 401) return redirectToLogin("Session expired. Redirecting to login...");
-      if (st === 403 || st === 404) return showNotFoundStyle("This action is not available.");
-      setTasks(before);
-      setErrorMsg(`Delete failed. ${niceError(e)}`);
-      setStatus("Error");
-      await refresh();
-    } finally {
-      setBusyTaskId(null);
-    }
-  }
+      // optimistic UI
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+
+      try {
+        await api.deleteTask(id);
+        setStatus("Deleted. Refreshing...");
+        await refresh();
+      } catch (e) {
+        const st = getStatus(e);
+        if (st === 401) return redirectToLogin("Session expired. Redirecting to login...");
+        if (st === 403 || st === 404) return showNotFoundStyle("This action is not available.");
+        setTasks(before);
+        setErrorMsg(`Delete failed. ${niceError(e)}`);
+        setStatus("Error");
+        await refresh();
+      } finally {
+        setBusyTaskId(null);
+      }
+    },
+    [tasks, refresh, redirectToLogin, showNotFoundStyle]
+  );
 
   const isDisabled = busyGlobal !== null || busyTaskId !== null;
 
@@ -276,7 +293,6 @@ export default function TasksPage() {
 
   return (
     <main className="space-y-6">
-      {/* ✅ No local nav here (layout owns global nav + logout) */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Tasks</h2>
         <p className="mt-1 text-sm text-zinc-600">
@@ -342,18 +358,19 @@ export default function TasksPage() {
             <input
               value={title}
               onChange={(e) => {
-                setTitle(e.target.value);
-                if (titleError) setTitleError(validateTitle(e.target.value));
+                const v = e.target.value;
+                setTitle(v);
+                if (titleError) setTitleError(validateTitle(v));
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") addTask();
+                if (e.key === "Enter") void addTask();
               }}
               disabled={isDisabled}
               className="flex-1 rounded-2xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-400 disabled:opacity-60"
               placeholder='New task title (e.g., "Neon proof task")'
             />
             <button
-              onClick={addTask}
+              onClick={() => void addTask()}
               disabled={isDisabled}
               className="rounded-2xl bg-zinc-900 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60"
             >
@@ -389,8 +406,9 @@ export default function TasksPage() {
                             <input
                               value={editTitle}
                               onChange={(e) => {
-                                setEditTitle(e.target.value);
-                                if (editError) setEditError(validateTitle(e.target.value));
+                                const v = e.target.value;
+                                setEditTitle(v);
+                                if (editError) setEditError(validateTitle(v));
                               }}
                               disabled={isDisabled}
                               className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
@@ -411,7 +429,7 @@ export default function TasksPage() {
                       {isEditing ? (
                         <>
                           <button
-                            onClick={() => saveEdit(t.id)}
+                            onClick={() => void saveEdit(t.id)}
                             disabled={rowBusy}
                             className="rounded-2xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60"
                           >
@@ -435,14 +453,14 @@ export default function TasksPage() {
                             Edit
                           </button>
                           <button
-                            onClick={() => toggleTask(t.id)}
+                            onClick={() => void toggleTask(t.id)}
                             disabled={rowBusy}
                             className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
                           >
                             {busyTaskId === t.id ? "Working..." : "Toggle"}
                           </button>
                           <button
-                            onClick={() => deleteTask(t.id)}
+                            onClick={() => void deleteTask(t.id)}
                             disabled={rowBusy}
                             className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
                           >
@@ -458,8 +476,8 @@ export default function TasksPage() {
           )}
         </div>
       </div>
-      <AIFloat />
 
+      <AIFloat />
     </main>
   );
 }

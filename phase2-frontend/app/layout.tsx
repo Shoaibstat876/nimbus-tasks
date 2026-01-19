@@ -1,8 +1,9 @@
 import "./globals.css";
+import type { Metadata } from "next";
 import { HeaderClient } from "./header-client";
 import { AIFloat } from "./components/AIFloat";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Nimbus Tasks",
   description: "Secure tasks with Auth, Ownership, CRUD, and Chat (proof UI).",
 };
@@ -21,7 +22,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {/* CONTENT */}
             <div className="px-8 py-8">
               {children}
-             
             </div>
 
             {/* FOOTER */}
@@ -30,6 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </div>
+
+        {/* Global AI (self-gated inside AIFloat for guest routes + unauth) */}
+        <AIFloat />
       </body>
     </html>
   );

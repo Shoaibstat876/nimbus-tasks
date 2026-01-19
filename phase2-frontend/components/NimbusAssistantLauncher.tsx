@@ -6,79 +6,123 @@ import { api } from "@/lib/api";
 
 type Me = { id: number; email: string };
 
+type HistoryApiMessage = { role: string; content: string };
+
+type LoadResult = {
+  conversationId: string | null;
+  messages: ModalMessage[];
+};
+
 // per-user conversation id key
-function convKey(userId: number) {
+function convKey(userId: number): string {
   return `nimbus.conversation_id.${userId}`;
 }
 
-function looksLikeUuid(v: string) {
+function looksLikeUuid(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     v.trim()
   );
 }
 
+function getStatus(e: unknown): number | null {
+  if (typeof e === "object" && e !== null && "status" in e) {
+    const v = (e as { status?: unknown }).status;
+    return typeof v === "number" ? v : null;
+  }
+  return null;
+}
+
+function safeGet(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(key);
+}
+
+function safeSet(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, value);
+}
+
+function safeRemove(key: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(key);
+}
+
+function toModalMessages(raw: unknown): ModalMessage[] {
+  const arr = Array.isArray(raw) ? (raw as HistoryApiMessage[]) : [];
+  return arr.map((m) => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: String(m.content ?? ""),
+  }));
+}
+
 export default function NimbusAssistantLauncher() {
   const [open, setOpen] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
 
-  const onLoadHistory = useCallback(async () => {
-    // must be logged in already; Chat page is protected and token exists
-    const me: Me = await api.me();
+  const ensureMe = useCallback(async (): Promise<Me> => {
+    if (me) return me;
+    const who = await api.me();
+    setMe(who);
+    return who;
+  }, [me]);
 
-    const stored =
-      typeof window !== "undefined" ? localStorage.getItem(convKey(me.id)) : null;
+  const onLoadHistory = useCallback(async (): Promise<LoadResult> => {
+    const who = await ensureMe();
+    const key = convKey(who.id);
 
-    // if invalid -> clear it and start fresh
+    const stored = safeGet(key);
+
+    // invalid -> clear it and start fresh
     if (stored && !looksLikeUuid(stored)) {
-      if (typeof window !== "undefined") localStorage.removeItem(convKey(me.id));
-      return { conversationId: null, messages: [] as ModalMessage[] };
+      safeRemove(key);
+      return { conversationId: null, messages: [] };
     }
 
-    // if no stored conversation -> start fresh
     if (!stored) {
-      return { conversationId: null, messages: [] as ModalMessage[] };
+      return { conversationId: null, messages: [] };
     }
 
-    // try load history
     try {
       const history = await api.getChatHistory(stored);
-
-      const msgs: ModalMessage[] = Array.isArray(history.messages)
-        ? history.messages.map((m: any) => ({
-            role: m.role === "assistant" ? "assistant" : "user",
-            content: String(m.content ?? ""),
-          }))
-        : [];
-
+      const msgs = toModalMessages(history.messages);
       return { conversationId: history.conversation_id ?? stored, messages: msgs };
-    } catch (e: any) {
+    } catch (e) {
+      const st = getStatus(e);
+
       // Owner-only 404 or deleted conversation -> start fresh
-      if (e && typeof e === "object" && "status" in e && e.status === 404) {
-        if (typeof window !== "undefined") localStorage.removeItem(convKey(me.id));
-        return { conversationId: null, messages: [] as ModalMessage[] };
+      if (st === 404) {
+        safeRemove(key);
+        return { conversationId: null, messages: [] };
       }
-      // Let modal show error
+
+      // Session expired -> clear local conversation cache, let modal decide UX
+      if (st === 401) {
+        safeRemove(key);
+        setMe(null);
+        return { conversationId: null, messages: [] };
+      }
+
       throw e;
     }
-  }, []);
+  }, [ensureMe]);
 
-  const onSend = useCallback(async (message: string, conversationId?: string) => {
-    const me: Me = await api.me();
+  const onSend = useCallback(
+    async (message: string, conversationId?: string) => {
+      const who = await ensureMe();
+      const res = await api.sendChatMessage(message, conversationId);
 
-    const res = await api.sendChatMessage(message, conversationId);
+      safeSet(convKey(who.id), res.conversation_id);
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem(convKey(me.id), res.conversation_id);
-    }
-
-    return {
-      conversationId: res.conversation_id,
-      reply: res.response,
-    };
-  }, []);
+      return {
+        conversationId: res.conversation_id,
+        reply: res.response,
+      };
+    },
+    [ensureMe]
+  );
 
   return (
     <>
-      {/* Floating button (bottom-right) */}
       <button
         type="button"
         onClick={() => setOpen(true)}

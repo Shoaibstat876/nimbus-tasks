@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { setToken, logoutEverywhere, getToken } from "@/lib/services/auth";
@@ -24,9 +24,12 @@ function Banner({ type, text }: { type: BannerType; text: string }) {
 function getErrorMessage(e: unknown): string {
   if (!e) return "Unknown error.";
   if (typeof e === "string") return e;
-  if (typeof e === "object" && "message" in e && typeof (e as any).message === "string") {
-    return (e as any).message;
+
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const msg = (e as { message?: unknown }).message;
+    if (typeof msg === "string") return msg;
   }
+
   try {
     return JSON.stringify(e);
   } catch {
@@ -36,9 +39,20 @@ function getErrorMessage(e: unknown): string {
 
 function getStatus(e: unknown): number | null {
   if (typeof e === "object" && e !== null && "status" in e) {
-    const v = (e as any).status;
+    const v = (e as { status?: unknown }).status;
     return typeof v === "number" ? v : null;
   }
+  return null;
+}
+
+function normalizeEmail(v: string): string {
+  return v.trim();
+}
+
+function validateLoginInput(email: string, password: string): string | null {
+  const e = normalizeEmail(email);
+  if (!e) return "Email is required.";
+  if (!password) return "Password is required.";
   return null;
 }
 
@@ -54,42 +68,49 @@ export default function LoginPage() {
     text: "Login → verify /me → redirect to Tasks.",
   });
 
-  // ✅ If already authenticated, don't show login again.
-  useEffect(() => {
+  const verifyExistingSession = useCallback(async () => {
     const token = getToken();
     if (!token) return;
 
-    (async () => {
-      setBusy(true);
-      setBanner({ type: "info", text: "Checking existing session…" });
+    setBusy(true);
+    setBanner({ type: "info", text: "Checking existing session…" });
 
-      try {
-        const me = await api.me();
-        setBanner({ type: "ok", text: `Already signed in as ${me.email}. Redirecting to Tasks…` });
-        router.replace("/tasks");
-      } catch (e) {
-        const st = getStatus(e);
-        if (st === 401) {
-          logoutEverywhere();
-          setBanner({ type: "info", text: "Session expired. Please login again." });
-          return;
-        }
-        setBanner({ type: "warn", text: `Could not verify session. ${getErrorMessage(e)}` });
-      } finally {
-        setBusy(false);
+    try {
+      const me = await api.me();
+      setBanner({ type: "ok", text: `Already signed in as ${me.email}. Redirecting to Tasks…` });
+      router.replace("/tasks");
+    } catch (e) {
+      const st = getStatus(e);
+      if (st === 401) {
+        logoutEverywhere();
+        setBanner({ type: "info", text: "Session expired. Please login again." });
+        return;
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      setBanner({ type: "warn", text: `Could not verify session. ${getErrorMessage(e)}` });
+    } finally {
+      setBusy(false);
+    }
+  }, [router]);
 
-  async function onLogin() {
+  // ✅ If already authenticated, don't show login again.
+  useEffect(() => {
+    void verifyExistingSession();
+  }, [verifyExistingSession]);
+
+  const onLogin = useCallback(async () => {
     if (busy) return;
+
+    const err = validateLoginInput(email, password);
+    if (err) {
+      setBanner({ type: "warn", text: err });
+      return;
+    }
 
     setBusy(true);
     setBanner({ type: "info", text: "Logging in and verifying session…" });
 
     try {
-      const data = await api.login(email.trim(), password);
+      const data = await api.login(normalizeEmail(email), password);
       setToken(data.access_token);
 
       const me = await api.me();
@@ -106,7 +127,7 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
-  }
+  }, [busy, email, password, router]);
 
   return (
     <main className="mx-auto max-w-xl space-y-6">
@@ -148,7 +169,6 @@ export default function LoginPage() {
           {busy ? "Signing in…" : "Login"}
         </button>
 
-        {/* ✅ Sign up link */}
         <div className="text-center text-sm text-zinc-600">
           New here?{" "}
           <Link href="/register" className="font-medium text-zinc-900 underline">

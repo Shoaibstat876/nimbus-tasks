@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
@@ -20,6 +20,32 @@ function Banner({ type, text }: { type: BannerType; text: string }) {
   return <div className={`rounded-2xl border px-4 py-3 text-sm ${cls}`}>{text}</div>;
 }
 
+function getErrorMessage(e: unknown): string {
+  if (!e) return "Unknown error.";
+  if (typeof e === "string") return e;
+
+  if (typeof e === "object" && e !== null && "message" in e) {
+    const msg = (e as { message?: unknown }).message;
+    if (typeof msg === "string") return msg;
+  }
+
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return "Registration failed. Please try again.";
+  }
+}
+
+function normalizeEmail(v: string): string {
+  return v.trim();
+}
+
+function validateRegisterInput(email: string, password: string): string | null {
+  if (!normalizeEmail(email)) return "Email is required.";
+  if (!password) return "Password is required.";
+  return null;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -32,31 +58,39 @@ export default function RegisterPage() {
     text: "Create an account → then login.",
   });
 
-  async function onRegister() {
+  const onRegister = useCallback(async () => {
     if (busy) return;
+
+    const err = validateRegisterInput(email, password);
+    if (err) {
+      setBanner({ type: "warn", text: err });
+      return;
+    }
 
     setBusy(true);
     setBanner({ type: "info", text: "Creating account…" });
 
     try {
-      await api.register(email.trim(), password);
+      await api.register(normalizeEmail(email), password);
+
       setBanner({
         type: "ok",
         text: "Account created successfully. Redirecting to login…",
       });
 
+      // Explicit UX delay (intentional, not hidden)
       setTimeout(() => {
         router.replace("/login");
       }, 800);
     } catch (e) {
       setBanner({
         type: "err",
-        text: e instanceof Error ? e.message : "Registration failed. Please try again.",
+        text: getErrorMessage(e),
       });
     } finally {
       setBusy(false);
     }
-  }
+  }, [busy, email, password, router]);
 
   return (
     <main className="mx-auto max-w-xl space-y-6">
@@ -98,7 +132,6 @@ export default function RegisterPage() {
           {busy ? "Creating…" : "Create Account"}
         </button>
 
-        {/* Optional tiny link inside the card (NOT header nav) */}
         <div className="text-center text-sm text-zinc-600">
           Already have an account?{" "}
           <Link href="/login" className="font-medium text-zinc-900 underline">

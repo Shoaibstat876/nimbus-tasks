@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { isAuthenticated, logoutEverywhere } from "@/lib/services/auth";
 
 function PillLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -36,22 +36,24 @@ function PillButton({
 export function HeaderClient() {
   const router = useRouter();
   const pathname = usePathname();
+
   const [authed, setAuthed] = useState(false);
 
-  // Treat login/register as "guest screens"
+  // Guest-only screens (auth pages)
   const isGuestScreen = useMemo(() => {
     return pathname === "/login" || pathname === "/register";
   }, [pathname]);
 
+  // Single source of truth for auth state
   useEffect(() => {
     setAuthed(isAuthenticated());
   }, [pathname]);
 
-  function onLogout() {
+  const onLogout = useCallback(() => {
     logoutEverywhere();
     setAuthed(false);
     router.replace("/login");
-  }
+  }, [router]);
 
   const Brand = (
     <div className="text-left">
@@ -75,12 +77,12 @@ export function HeaderClient() {
         Brand
       )}
 
-      {/* Nav: ONLY when authenticated, and NEVER on guest screens */}
+      {/* Nav: ONLY when authenticated, NEVER on guest screens */}
       {authed && !isGuestScreen ? (
         <nav className="flex items-center gap-3">
           <PillLink href="/tasks">Tasks</PillLink>
 
-          {/* ✅ Removed top AI button. AI now lives in the floating modal only. */}
+          {/* AI lives only in floating modal (Spec-Kit compliant) */}
 
           <PillButton onClick={onLogout}>Logout</PillButton>
         </nav>
