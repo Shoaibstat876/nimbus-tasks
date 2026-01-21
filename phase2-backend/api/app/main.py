@@ -30,15 +30,30 @@ app = FastAPI(
 )
 
 # ============================================================
-# CORS CONFIGURATION (Frontend ↔ Backend Bridge)
+# CORS CONFIGURATION (VERCEL + LOCALHOST + AUTH SAFE)
+# - Explicit origins (NO "*")
+# - Credentials allowed (Authorization header / cookies safe)
+# - Explicit methods + headers to avoid browser preflight edge-cases
 # ============================================================
-# Allows Next.js frontend (localhost:3000) to call this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        # Production (Vercel)
+        "https://nimbus-tasks-web.vercel.app",
+        "https://nimbus-tasks-web-git-main-shoaibstat876s-projects.vercel.app",
+        # Local dev
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+    ],
 )
 
 # ============================================================
