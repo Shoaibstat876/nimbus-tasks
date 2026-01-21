@@ -72,26 +72,73 @@ def get_current_user(
     return user
 
 
+async def _read_register_payload(request: Request) -> dict:
+    """
+    Robustly read payload from JSON or Form.
+
+    Why this exists:
+    - Some clients send JSON with wrong/odd content-type (or charset variants)
+    - Some send form-encoded payload
+    - We want to prevent 422 "json_invalid" forever
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    # 1) Prefer JSON if content-type indicates JSON
+    if "application/json" in content_type:
+        try:
+            raw = await request.json()
+            if isinstance(raw, dict):
+                return raw
+            raise HTTPException(status_code=400, detail="JSON body must be an object")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    # 2) If content-type is not JSON, still try to parse JSON when body looks like JSON
+    #    (This fixes clients/proxies that send JSON but wrong headers)
+    try:
+        body = await request.body()
+    except Exception:
+        body = b""
+
+    body_text = ""
+    try:
+        body_text = body.decode("utf-8", errors="ignore").strip()
+    except Exception:
+        body_text = ""
+
+    if body_text.startswith("{") and body_text.endswith("}"):
+        try:
+            raw = await request.json()
+            if isinstance(raw, dict):
+                return raw
+            raise HTTPException(status_code=400, detail="JSON body must be an object")
+        except HTTPException:
+            raise
+        except Exception:
+            # fall through to form parsing attempt
+            pass
+
+    # 3) Fall back to Form
+    # NOTE: requires python-multipart installed
+    try:
+        form = await request.form()
+        return dict(form)
+    except Exception:
+        # If neither JSON nor form works, return a clear error
+        raise HTTPException(status_code=400, detail="Unsupported or empty request body")
+
+
 @router.post("/register", response_model=RegisterOut, status_code=status.HTTP_201_CREATED)
 async def register(request: Request, session: Session = Depends(get_session)):
     """
     Robust register:
     - Accepts JSON (application/json)
-    - Also accepts form (application/x-www-form-urlencoded, multipart/form-data)
-    This prevents "JSON decode error" forever.
+    - Accepts form (application/x-www-form-urlencoded, multipart/form-data)
+    - Also accepts JSON even if content-type is wrong (best-effort)
     """
-    content_type = (request.headers.get("content-type") or "").lower()
-
-    if "application/json" in content_type:
-        try:
-            raw = await request.json()
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
-    else:
-        # NOTE: requires python-multipart installed
-        form = await request.form()
-        raw = dict(form)
-
+    raw = await _read_register_payload(request)
     data = _validate_register_payload(raw)
 
     email = normalize_email(data.email)
