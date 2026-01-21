@@ -38,13 +38,13 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        # Production (Vercel)
         "https://nimbus-tasks-web.vercel.app",
         "https://nimbus-tasks-web-git-main-shoaibstat876s-projects.vercel.app",
-        # Local dev
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
+    # This covers ALL vercel preview domains safely
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
