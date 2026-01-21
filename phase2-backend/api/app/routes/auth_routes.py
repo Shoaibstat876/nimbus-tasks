@@ -46,6 +46,10 @@ class RegisterOut(BaseModel):
     email: EmailStr
 
 
+def normalize_email(v: str) -> str:
+    return (v or "").strip().lower()
+
+
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
@@ -70,9 +74,18 @@ def get_current_user(
 
 @router.post("/register", response_model=RegisterOut, status_code=status.HTTP_201_CREATED)
 def register(data: RegisterIn, session: Session = Depends(get_session)):
-    email = data.email.strip().lower()
+    """
+    Register a user safely:
+    - Normalizes email
+    - Validates password length
+    - Prevents duplicates
+    - Rolls back on DB errors to avoid 500 -> "CORS" illusion in browser
+    """
+    email = normalize_email(data.email)
 
-    if len(data.password) < 6:
+    # Basic password policy (hackathon-safe)
+    password = (data.password or "").strip()
+    if len(password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password too short (min 6)",
@@ -85,10 +98,28 @@ def register(data: RegisterIn, session: Session = Depends(get_session)):
             detail="Email already registered",
         )
 
-    user = User(email=email, hashed_password=hash_password(data.password))
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    user = User(email=email, hashed_password=hash_password(password))
+
+    try:
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    except Exception:
+        # IMPORTANT: prevent unhandled 500 (which looks like CORS in browser)
+        session.rollback()
+
+        # Re-check: in case race-condition created duplicate email between check and commit
+        existing_after = session.exec(select(User).where(User.email == email)).first()
+        if existing_after:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Registration failed. Please try again.",
+        )
 
     return {"ok": True, "id": user.id, "email": user.email}
 
@@ -104,10 +135,11 @@ def login(
       - username is the EMAIL
       - password is the PASSWORD
     """
-    email = (form_data.username or "").strip().lower()
+    email = normalize_email(form_data.username)
+    password = form_data.password or ""
 
     user = session.exec(select(User).where(User.email == email)).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -123,10 +155,11 @@ def login_json(data: LoginIn, session: Session = Depends(get_session)):
     Optional convenience endpoint (Postman / custom clients).
     Keeps your original JSON login behavior.
     """
-    email = data.email.strip().lower()
+    email = normalize_email(data.email)
+    password = (data.password or "").strip()
 
     user = session.exec(select(User).where(User.email == email)).first()
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user or not verify_password(password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
