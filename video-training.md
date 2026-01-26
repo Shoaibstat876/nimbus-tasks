@@ -430,3 +430,39 @@ alt-svc: h3=":443"; ma=86400
 
 [{"id":35,"user_id":19,"title":"Neon Blast","is_completed":true,"created_at":"2026-01-21T15:01:15.092412","updated_at":"2026-01-21T15:01:27.480681"},{"id":34,"user_id":19,"title":"Neon Task","is_completed":false,"created_at":"2026-01-21T15:01:01.370678","updated_at":"2026-01-21T15:01:01.371698"}]
 PS D:\Shoaib Project\nimbus-tasks>
+
+
+-----------------------------------------------------------------------------------------------
+phase 4 :
+
+PS D:\Shoaib Project\nimbus-tasks\phase2-backend\api> docker run --rm -p 8000:8000 --name nimbus-backend-test --env-file .env nimbus-backend:phase4
+
+docker run --rm -p 8000:8000 --name nimbus-backend-test --env-file .env nimbus-backend:phase4
+curl.exe http://localhost:8000/api/health
+docker ps
+
+frontend
+PS D:\Shoaib Project\nimbus-tasks\phase2-frontend> docker run --rm -p 3000:3000 --name nimbus-frontend-test nimbus-frontend:phase4
+>>
+
+> phase2-frontend@0.1.0 start
+> next start
+
+▲ Next.js 16.1.1
+- Local:         http://localhost:3000
+- Network:       http://172.17.0.2:3000
+
+✓ Starting...
+✓ Ready in 654ms
+
+health:
+PS D:\Shoaib Project\nimbus-tasks> curl.exe http://localhost:8000/api/health
+>>
+{"ok":true}
+PS D:\Shoaib Project\nimbus-tasks>
+
+backend
+PS D:\Shoaib Project\nimbus-tasks> cd "D:\Shoaib Project\nimbus-tasks\phase2-backend\api"
+>> docker run --rm -p 8000:8000 --name nimbus-backend-test --env-file .env nimbus-backend:phase4
+>> 
+github push:
