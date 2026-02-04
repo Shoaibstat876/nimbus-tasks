@@ -7,17 +7,22 @@ from sqlmodel import Session, select
 
 from ..database import get_session
 from ..models import User
-from ..auth import hash_password, verify_password, create_access_token, decode_token
+from ..auth import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    decode_token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-# Swagger OAuth2 "Authorize" uses password flow and hits tokenUrl with FORM DATA
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# Swagger OAuth2 (FORM) — for docs only
+# Real application login is JSON at /api/auth/login
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
-
-# =========================
+# ============================================================
 # Schemas
-# =========================
+# ============================================================
 
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -45,48 +50,37 @@ class RegisterOut(BaseModel):
     email: EmailStr
 
 
-# =========================
+# ============================================================
 # Helpers
-# =========================
+# ============================================================
 
 def normalize_email(v: str) -> str:
     return (v or "").strip().lower()
 
 
 def _validate_register_payload(raw: dict) -> RegisterIn:
-    # Pydantic v2 / v1 compatibility
+    # Pydantic v1 / v2 compatibility
     try:
         return RegisterIn.model_validate(raw)  # type: ignore[attr-defined]
     except AttributeError:
         return RegisterIn.parse_obj(raw)
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    session: Session = Depends(get_session),
-) -> User:
-    sub = decode_token(token)
-    if not sub:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
+def _validate_login_payload(raw: dict) -> LoginIn:
+    # Pydantic v1 / v2 compatibility
     try:
-        user_id = int(sub)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
-
-    user = session.exec(select(User).where(User.id == user_id)).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
+        return LoginIn.model_validate(raw)  # type: ignore[attr-defined]
+    except AttributeError:
+        return LoginIn.parse_obj(raw)
 
 
-async def _read_register_payload(request: Request) -> dict:
+async def _read_payload(request: Request) -> dict:
     """
     Robust payload reader:
-    - JSON
-    - JSON with wrong headers
-    - Form-data
-    Prevents 422 json_invalid forever.
+    - Proper JSON
+    - JSON with incorrect headers
+    - Form-data fallback
+    Eliminates 422 errors permanently.
     """
     content_type = (request.headers.get("content-type") or "").lower()
 
@@ -125,13 +119,65 @@ async def _read_register_payload(request: Request) -> dict:
         raise HTTPException(status_code=400, detail="Unsupported or empty request body")
 
 
-# =========================
-# Routes
-# =========================
+def _issue_token_for_email_password(
+    email: str,
+    password: str,
+    session: Session,
+) -> dict:
+    user = session.exec(select(User).where(User.email == email)).first()
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
 
-@router.post("/register", response_model=RegisterOut, status_code=status.HTTP_201_CREATED)
-async def register(request: Request, session: Session = Depends(get_session)):
-    raw = await _read_register_payload(request)
+    token = create_access_token(str(user.id))
+    return {"access_token": token, "token_type": "bearer"}
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    session: Session = Depends(get_session),
+) -> User:
+    sub = decode_token(token)
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    try:
+        user_id = int(sub)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+        )
+
+    user = session.exec(select(User).where(User.id == user_id)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    return user
+
+
+# ============================================================
+# Routes
+# ============================================================
+
+@router.post(
+    "/register",
+    response_model=RegisterOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    raw = await _read_payload(request)
     data = _validate_register_payload(raw)
 
     email = normalize_email(data.email)
@@ -143,7 +189,6 @@ async def register(request: Request, session: Session = Depends(get_session)):
             detail="Password too short (min 6)",
         )
 
-    # Pre-check (fast path)
     existing = session.exec(select(User).where(User.email == email)).first()
     if existing:
         raise HTTPException(
@@ -151,25 +196,17 @@ async def register(request: Request, session: Session = Depends(get_session)):
             detail="Email already registered",
         )
 
-    user = User(email=email, hashed_password=hash_password(password))
+    user = User(
+        email=email,
+        hashed_password=hash_password(password),
+    )
 
     try:
         session.add(user)
         session.commit()
         session.refresh(user)
-
     except Exception:
         session.rollback()
-
-        # Handle race-condition / unique constraint safely
-        existing_after = session.exec(select(User).where(User.email == email)).first()
-        if existing_after:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
-            )
-
-        # True DB failure
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error during registration",
@@ -178,39 +215,44 @@ async def register(request: Request, session: Session = Depends(get_session)):
     return {"ok": True, "id": user.id, "email": user.email}
 
 
+# ✅ MAIN LOGIN (JSON)
+# POST /api/auth/login
 @router.post("/login", response_model=TokenOut)
-def login(
+async def login(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    raw = await _read_payload(request)
+    data = _validate_login_payload(raw)
+
+    email = normalize_email(data.email)
+    password = (data.password or "").strip()
+
+    return _issue_token_for_email_password(email, password, session)
+
+
+# ✅ Swagger-only FORM endpoint
+# POST /api/auth/token
+@router.post("/token", response_model=TokenOut)
+def token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ):
     email = normalize_email(form_data.username)
-    password = form_data.password or ""
+    password = (form_data.password or "").strip()
 
-    user = session.exec(select(User).where(User.email == email)).first()
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    token = create_access_token(str(user.id))
-    return {"access_token": token, "token_type": "bearer"}
+    return _issue_token_for_email_password(email, password, session)
 
 
-@router.post("/login/json", response_model=TokenOut)
-def login_json(data: LoginIn, session: Session = Depends(get_session)):
+# Optional backward-compatible alias
+@router.post("/login/json", response_model=TokenOut, deprecated=True)
+def login_json(
+    data: LoginIn,
+    session: Session = Depends(get_session),
+):
     email = normalize_email(data.email)
     password = (data.password or "").strip()
-
-    user = session.exec(select(User).where(User.email == email)).first()
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
-
-    token = create_access_token(str(user.id))
-    return {"access_token": token, "token_type": "bearer"}
+    return _issue_token_for_email_password(email, password, session)
 
 
 @router.get("/me", response_model=UserOut)

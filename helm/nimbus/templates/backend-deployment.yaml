@@ -15,12 +15,21 @@ spec:
     spec:
       containers:
         - name: backend
-          image: "{{ .Values.backend.image }}:{{ .Values.backend.tag }}"
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: {{ .Values.backend.containerPort }}
+
+          # Backend env values from values.yaml (safe even if env missing)
+          {{- with .Values.backend.env }}
           env:
-            {{- range $key, $value := .Values.backend.env }}
-            - name: {{ $key }}
-              value: "{{ $value }}"
-            {{- end }}
+          {{- range $k, $v := . }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+          {{- end }}
+          {{- end }}
+
+          # ✅ Inject K8s secret so DATABASE_URL (and others) reach the container
+          envFrom:
+            - secretRef:
+                name: nimbus-backend-env

@@ -1,7 +1,21 @@
 import { getToken } from "./auth";
 
-const API_BASE_RAW = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").trim();
-const API_BASE = API_BASE_RAW.endsWith("/") ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
+/**
+ * Phase IV/V rule:
+ * - Ingress makes frontend + backend same-origin
+ * - So safest default is "/api" (no localhost, no ports)
+ *
+ * You can still override via NEXT_PUBLIC_API_BASE_URL:
+ * - "/api" (recommended)
+ * - "http://nimbus.local/api" (also ok)
+ * - "https://your-domain.com/api" (prod)
+ */
+const API_BASE_RAW = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api").trim();
+
+// Normalize: remove trailing slash so `${API_BASE}${path}` is stable
+const API_BASE = API_BASE_RAW.endsWith("/")
+  ? API_BASE_RAW.slice(0, -1)
+  : API_BASE_RAW;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -26,7 +40,7 @@ function safeJsonParse(text: string): unknown {
 function buildError(status: number, text: string, fallback: string) {
   const parsed = safeJsonParse(text);
 
-  // FastAPI often returns { detail: "..." } (but detail can be any JSON)
+  // FastAPI often returns { detail: "..." } (detail can be any JSON)
   if (parsed && typeof parsed === "object" && "detail" in parsed) {
     const detail = (parsed as { detail?: unknown }).detail;
     const detailText = typeof detail === "string" ? detail : JSON.stringify(detail);
@@ -72,8 +86,7 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
     return JSON.parse(raw) as T;
   }
 
-  // Spec-Kit safety: if a "JSON expected" endpoint returns non-JSON,
-  // we keep old behavior (return undefined) to avoid breaking UI.
+  // Spec-Kit safety: keep old behavior (return undefined) to avoid breaking UI.
   return undefined as unknown as T;
 }
 
@@ -105,59 +118,54 @@ export type ChatHistoryResponse = {
 export const apiClient = {
   // Auth (NO token writes here — Law 3)
   register(email: string, password: string) {
-    return request<{ ok: boolean; id: number; email: string }>(`/api/auth/register`, {
+    return request<{ ok: boolean; id: number; email: string }>(`/auth/register`, {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
   },
 
   async login(email: string, password: string) {
-    // Keep login inside boundary, but do NOT store token here.
-    const body = new URLSearchParams();
-    body.set("username", email);
-    body.set("password", password);
-
-    return request<{ access_token: string; token_type: string }>(`/api/auth/login`, {
+    // ✅ Main login is JSON at /api/auth/login (NOT form)
+    return request<{ access_token: string; token_type: string }>(`/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
+      body: JSON.stringify({ email, password }),
     });
   },
 
   me() {
-    return request<{ id: number; email: string }>(`/api/auth/me`);
+    return request<{ id: number; email: string }>(`/auth/me`);
   },
 
   // Tasks
   listTasks() {
-    return request<TaskDTO[]>(`/api/tasks`);
+    return request<TaskDTO[]>(`/tasks`);
   },
 
   createTask(title: string) {
-    return request<TaskDTO>(`/api/tasks`, {
+    return request<TaskDTO>(`/tasks`, {
       method: "POST",
       body: JSON.stringify({ title }),
     });
   },
 
   updateTask(id: number, title: string) {
-    return request<TaskDTO>(`/api/tasks/${id}`, {
+    return request<TaskDTO>(`/tasks/${id}`, {
       method: "PUT",
       body: JSON.stringify({ title }),
     });
   },
 
   toggleTask(id: number) {
-    return request<TaskDTO>(`/api/tasks/${id}/toggle`, { method: "PATCH" });
+    return request<TaskDTO>(`/tasks/${id}/toggle`, { method: "PATCH" });
   },
 
   deleteTask(id: number) {
-    return request<void>(`/api/tasks/${id}`, { method: "DELETE" });
+    return request<void>(`/tasks/${id}`, { method: "DELETE" });
   },
 
   // Chat
   sendChatMessage(message: string, conversationId?: string) {
-    return request<ChatResponse>(`/api/chat`, {
+    return request<ChatResponse>(`/chat`, {
       method: "POST",
       body: JSON.stringify({
         message,
@@ -167,6 +175,6 @@ export const apiClient = {
   },
 
   getChatHistory(conversationId: string) {
-    return request<ChatHistoryResponse>(`/api/chat/history/${conversationId}`);
+    return request<ChatHistoryResponse>(`/chat/history/${conversationId}`);
   },
 };
