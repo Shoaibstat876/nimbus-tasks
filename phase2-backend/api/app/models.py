@@ -1,7 +1,7 @@
 # app/models.py
 
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional, List, Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy import String, Text
@@ -120,8 +120,34 @@ class Message(SQLModel, table=True):
 # API SCHEMAS (Pydantic models)
 # ============================================================
 
+Priority = Literal["low", "medium", "high"]
+Recurrence = Literal["none", "daily", "weekly", "monthly"]
+
+
 class TaskCreate(SQLModel):
+    # existing required field
     title: str
+
+    # Phase V inputs (optional / safe defaults)
+    priority: Priority = "medium"
+    tags: List[str] = Field(default_factory=list)
+
+    due_at: Optional[datetime] = None
+    remind_at: Optional[datetime] = None
+
+    recurrence: Recurrence = "none"
+
+
+class TaskUpdate(SQLModel):
+    # Optional fields for safe partial updates
+    title: Optional[str] = None
+    priority: Optional[Priority] = None
+    tags: Optional[List[str]] = None
+
+    due_at: Optional[datetime] = None
+    remind_at: Optional[datetime] = None
+
+    recurrence: Optional[Recurrence] = None
 
 
 class TaskRead(SQLModel):
@@ -130,13 +156,20 @@ class TaskRead(SQLModel):
     title: str
     is_completed: bool
 
-    # Phase V fields (read)
-    priority: str
+    # Phase V outputs
+    priority: Priority
+
+    # Teacher-friendly tags list
+    tags: List[str] = Field(default_factory=list)
+
+    # Backward compatible raw storage field
     tags_csv: str
+
     due_at: Optional[datetime]
     remind_at: Optional[datetime]
     reminded_at: Optional[datetime]
-    recurrence: str
+
+    recurrence: Recurrence
 
     created_at: datetime
     updated_at: datetime
