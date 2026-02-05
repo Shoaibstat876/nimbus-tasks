@@ -40,6 +40,28 @@ class Task(SQLModel, table=True):
     title: str = Field(max_length=80, index=True, nullable=False)
     is_completed: bool = Field(default=False, index=True, nullable=False)
 
+    # ----------------------------
+    # Phase V feature fields
+    # (safe defaults; do not break existing tasks)
+    # ----------------------------
+    priority: str = Field(default="medium", max_length=16, nullable=False)
+    tags_csv: str = Field(default="", max_length=1000, nullable=False)
+
+    due_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    remind_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    reminded_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    recurrence: str = Field(default="none", max_length=16, nullable=False)
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(DateTime(timezone=True), nullable=False),
@@ -107,5 +129,14 @@ class TaskRead(SQLModel):
     user_id: int
     title: str
     is_completed: bool
+
+    # Phase V fields (read)
+    priority: str
+    tags_csv: str
+    due_at: Optional[datetime]
+    remind_at: Optional[datetime]
+    reminded_at: Optional[datetime]
+    recurrence: str
+
     created_at: datetime
     updated_at: datetime
