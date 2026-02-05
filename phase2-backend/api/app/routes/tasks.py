@@ -1,12 +1,12 @@
 from datetime import datetime
-from typing import List, Optional, Literal
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, or_
+from sqlalchemy import case
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import Task, TaskCreate, TaskRead, User
+from ..models import Task, TaskCreate, TaskRead, TaskUpdate, User
 from .auth_routes import get_current_user
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -15,10 +15,6 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 # ============================================================
 # Helpers (pure, deterministic, spec-aligned)
 # ============================================================
-
-Priority = Literal["low", "medium", "high"]
-Recurrence = Literal["none", "daily", "weekly", "monthly"]
-
 
 def tags_list_to_csv(tags: Optional[list[str]]) -> str:
     if not tags:
@@ -107,8 +103,7 @@ def _get_owned_task_or_404(
 
 def _task_to_read(task: Task) -> TaskRead:
     """
-    Convert DB Task -> API TaskRead.
-    TaskRead already includes Phase V fields in your models.py.
+    Convert DB Task -> API TaskRead (teacher-friendly).
     """
     return TaskRead(
         id=task.id,
@@ -116,6 +111,7 @@ def _task_to_read(task: Task) -> TaskRead:
         title=task.title,
         is_completed=task.is_completed,
         priority=task.priority,
+        tags=tags_csv_to_list(task.tags_csv),
         tags_csv=task.tags_csv,
         due_at=task.due_at,
         remind_at=task.remind_at,
@@ -183,7 +179,7 @@ def list_tasks(
     List tasks owned by the current user.
 
     Phase V:
-    - q: search title/description (description not present; safe: title only)
+    - q: search title
     - status: all/pending/completed
     - priority: low/medium/high
     - tag: substring match against tags_csv (judge-safe)
@@ -199,7 +195,6 @@ def list_tasks(
         stmt = stmt.where(Task.is_completed.is_(False))
     elif sf == "completed":
         stmt = stmt.where(Task.is_completed.is_(True))
-    # "all" or empty -> no filter
 
     # priority
     pr = (priority or "").strip().lower()
@@ -213,11 +208,10 @@ def list_tasks(
     if tg:
         stmt = stmt.where(Task.tags_csv.ilike(f"%{tg}%"))
 
-    # search (title only; you don't have description field in DB model)
+    # search (title)
     qq = (q or "").strip()
     if qq:
-        like = f"%{qq}%"
-        stmt = stmt.where(Task.title.ilike(like))
+        stmt = stmt.where(Task.title.ilike(f"%{qq}%"))
 
     # due filters
     if due_before:
@@ -225,7 +219,7 @@ def list_tasks(
     if due_after:
         stmt = stmt.where(Task.due_at.is_not(None)).where(Task.due_at >= due_after)
 
-    # sort (deterministic)
+    # sort
     stmt = apply_sort(stmt, sort, order)
 
     stmt = stmt.offset(offset).limit(limit)
@@ -240,31 +234,18 @@ def create_task(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Create a new task for the authenticated user.
-
-    Phase V:
-    - payload may include: priority, tags_csv, due_at, remind_at, recurrence
+    Create a new task for the authenticated user (Phase V fields supported).
     """
     title = _validate_title_or_400(payload.title)
-
-    # Safely read optional fields if present in schema (backward compatible)
-    pr = getattr(payload, "priority", "medium")
-    rc = getattr(payload, "recurrence", "none")
-    tags_csv = getattr(payload, "tags_csv", "")
-
-    if pr not in {"low", "medium", "high"}:
-        raise HTTPException(status_code=400, detail="Invalid priority")
-    if rc not in {"none", "daily", "weekly", "monthly"}:
-        raise HTTPException(status_code=400, detail="Invalid recurrence")
 
     task = Task(
         title=title,
         user_id=current_user.id,
-        priority=pr,
-        tags_csv=tags_csv,
-        due_at=getattr(payload, "due_at", None),
-        remind_at=getattr(payload, "remind_at", None),
-        recurrence=rc,
+        priority=payload.priority,
+        tags_csv=tags_list_to_csv(payload.tags),
+        due_at=payload.due_at,
+        remind_at=payload.remind_at,
+        recurrence=payload.recurrence,
     )
 
     session.add(task)
@@ -276,15 +257,12 @@ def create_task(
 @router.put("/{task_id}", response_model=TaskRead)
 def update_task(
     task_id: int,
-    payload: TaskCreate,
+    payload: TaskUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update task title (owner-only).
-
-    Phase V:
-    - If optional fields exist on payload, update them too.
+    Update task fields (owner-only).
     """
     task = _get_owned_task_or_404(
         session=session,
@@ -292,29 +270,21 @@ def update_task(
         current_user=current_user,
     )
 
-    task.title = _validate_title_or_400(payload.title)
+    if payload.title is not None:
+        task.title = _validate_title_or_400(payload.title)
 
-    # Optional fields (only update if present)
-    if hasattr(payload, "priority") and payload.priority is not None:
-        pr = (payload.priority or "").strip().lower()
-        if pr not in {"low", "medium", "high"}:
-            raise HTTPException(status_code=400, detail="Invalid priority")
-        task.priority = pr
+    if payload.priority is not None:
+        task.priority = payload.priority
 
-    if hasattr(payload, "recurrence") and payload.recurrence is not None:
-        rc = (payload.recurrence or "").strip().lower()
-        if rc not in {"none", "daily", "weekly", "monthly"}:
-            raise HTTPException(status_code=400, detail="Invalid recurrence")
-        task.recurrence = rc
+    if payload.tags is not None:
+        task.tags_csv = tags_list_to_csv(payload.tags)
 
-    if hasattr(payload, "tags_csv") and payload.tags_csv is not None:
-        task.tags_csv = payload.tags_csv or ""
+    # datetime updates (explicit even if None)
+    task.due_at = payload.due_at
+    task.remind_at = payload.remind_at
 
-    if hasattr(payload, "due_at"):
-        task.due_at = getattr(payload, "due_at", None)
-
-    if hasattr(payload, "remind_at"):
-        task.remind_at = getattr(payload, "remind_at", None)
+    if payload.recurrence is not None:
+        task.recurrence = payload.recurrence
 
     _touch_updated_at(task)
 
