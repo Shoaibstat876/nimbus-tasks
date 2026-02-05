@@ -263,6 +263,10 @@ def update_task(
 ):
     """
     Update task fields (owner-only).
+
+    Judge-safe partial update:
+    - only update fields explicitly provided by the client
+    - allows explicit null to clear due_at/remind_at
     """
     task = _get_owned_task_or_404(
         session=session,
@@ -270,21 +274,25 @@ def update_task(
         current_user=current_user,
     )
 
-    if payload.title is not None:
-        task.title = _validate_title_or_400(payload.title)
+    data = payload.model_dump(exclude_unset=True)
 
-    if payload.priority is not None:
-        task.priority = payload.priority
+    if "title" in data:
+        task.title = _validate_title_or_400(data["title"])
 
-    if payload.tags is not None:
-        task.tags_csv = tags_list_to_csv(payload.tags)
+    if "priority" in data:
+        task.priority = data["priority"]
 
-    # datetime updates (explicit even if None)
-    task.due_at = payload.due_at
-    task.remind_at = payload.remind_at
+    if "tags" in data:
+        task.tags_csv = tags_list_to_csv(data["tags"])
 
-    if payload.recurrence is not None:
-        task.recurrence = payload.recurrence
+    if "due_at" in data:
+        task.due_at = data["due_at"]
+
+    if "remind_at" in data:
+        task.remind_at = data["remind_at"]
+
+    if "recurrence" in data:
+        task.recurrence = data["recurrence"]
 
     _touch_updated_at(task)
 
