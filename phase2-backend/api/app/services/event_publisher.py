@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import httpx
 
@@ -18,14 +18,17 @@ def _utc_iso() -> str:
 
 
 async def publish_event(topic: str, payload: Dict[str, Any], timeout_s: float = 2.5) -> bool:
-    \"\"\"Publish a single event via Dapr Pub/Sub HTTP. Safe logging only.\"\"\"
+    """Publish a single event via Dapr Pub/Sub HTTP. Safe logging only."""
     url = f"{DAPR_HTTP}/v1.0/publish/{PUBSUB}/{topic}"
     try:
         async with httpx.AsyncClient(timeout=timeout_s) as client:
             r = await client.post(url, json=payload)
             r.raise_for_status()
         # Safe log: do NOT dump payload
-        print(f"published {payload.get('event_name')} topic={topic} task_id={payload.get('data', {}).get('task_id')}")
+        print(
+            f"published {payload.get('event_name')} topic={topic} "
+            f"task_id={payload.get('data', {}).get('task_id')}"
+        )
         return True
     except Exception as e:
         # Safe warning only
@@ -74,7 +77,7 @@ async def emit_reminder_triggered(task: Any) -> bool:
 
 
 async def try_read_dapr_secret(secret_name: str = "phase5-proof", timeout_s: float = 2.5) -> bool:
-    \"\"\"Runtime-safe: warn only if Dapr not available.\"\"\"
+    """Runtime-safe: warn only if Dapr not available."""
     url = f"{DAPR_HTTP}/v1.0/secrets/secretstore/{secret_name}"
     try:
         async with httpx.AsyncClient(timeout=timeout_s) as client:
