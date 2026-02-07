@@ -1,7 +1,8 @@
-from datetime import datetime
+﻿from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.services.event_publisher import emit_task_event
 from sqlalchemy import case
 from sqlmodel import Session, select
 
@@ -250,7 +251,11 @@ def create_task(
 
     session.add(task)
     session.commit()
-    session.refresh(task)
+    try:
+        await emit_task_event("task.updated", task)
+    except Exception:
+        pass
+session.refresh(task)
     return _task_to_read(task)
 
 
@@ -298,7 +303,11 @@ def update_task(
 
     session.add(task)
     session.commit()
-    session.refresh(task)
+    try:
+        await emit_task_event("task.updated", task)
+    except Exception:
+        pass
+session.refresh(task)
     return _task_to_read(task)
 
 
@@ -322,7 +331,11 @@ def toggle_task(
 
     session.add(task)
     session.commit()
-    session.refresh(task)
+    try:
+        await emit_task_event("task.updated", task)
+    except Exception:
+        pass
+session.refresh(task)
     return _task_to_read(task)
 
 
@@ -343,4 +356,9 @@ def delete_task(
 
     session.delete(task)
     session.commit()
-    return None
+    try:
+        await emit_task_event("task.updated", task)
+    except Exception:
+        pass
+return None
+
