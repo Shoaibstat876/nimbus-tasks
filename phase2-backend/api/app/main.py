@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 import json
 import os
 from typing import List
-
+from app.routes import internal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -157,3 +157,4 @@ app.include_router(tasks_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(chat_history_router, prefix="/api")
+app.include_router(internal.router)
