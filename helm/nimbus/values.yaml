@@ -18,10 +18,17 @@ backend:
   name: nimbus-backend
   image:
     repository: nimbus-backend
-    tag: v-feb3
+    tag: v-feb8-step8b
   replicas: 1
   containerPort: 8000
   servicePort: 8000
+
+  # Step 8: enable Dapr sidecar
+  dapr:
+    enabled: true
+    appId: nimbus-backend
+    appPort: 8000
+
   env:
     JWT_ALGORITHM: "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
@@ -31,6 +38,25 @@ backend:
 
     # Used by auth flows / redirects (keep stable for ingress)
     AUTH_SERVER_URL: "http://nimbus.local"
+
+# Step 8: add worker image configuration
+worker:
+  name: nimbus-worker
+  image:
+    repository: nimbus-worker
+    tag: v-feb7-step8
+  replicas: 1
+  containerPort: 8001
+  servicePort: 8001
+
+  # Step 8: enable Dapr sidecar for worker
+  dapr:
+    enabled: true
+    appId: nimbus-worker
+    appPort: 8001
+
+  env:
+    PORT: "8001"
 
 ingress:
   enabled: true

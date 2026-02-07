@@ -12,6 +12,12 @@ spec:
     metadata:
       labels:
         app: {{ .Values.backend.name }}
+      {{- if and .Values.backend.dapr .Values.backend.dapr.enabled }}
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "{{ .Values.backend.dapr.appId }}"
+        dapr.io/app-port: "{{ .Values.backend.dapr.appPort }}"
+      {{- end }}
     spec:
       containers:
         - name: backend
