@@ -11,3 +11,5 @@ spec:
       value: "*/1 * * * *"
     - name: direction
       value: input
+    - name: route
+      value: /api/reminder-cron
