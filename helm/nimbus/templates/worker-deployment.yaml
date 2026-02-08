@@ -19,6 +19,8 @@ spec:
         dapr.io/app-port: "{{ .Values.worker.dapr.appPort }}"
       {{- end }}
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: worker
           image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
