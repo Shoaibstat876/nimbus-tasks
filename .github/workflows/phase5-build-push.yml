@@ -1,0 +1,61 @@
+name: Phase V - Build & Push Images (GHCR)
+
+on:
+  push:
+    branches: [ "phase5-cloud" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set vars
+        id: vars
+        run: |
+          echo "SHA=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/nimbus-backend" >> $GITHUB_OUTPUT
+          echo "WORKER_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/nimbus-worker" >> $GITHUB_OUTPUT
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend
+        run: |
+          docker build \
+            -t ${{ steps.vars.outputs.BACKEND_IMAGE }}:${{ steps.vars.outputs.SHA }} \
+            -t ${{ steps.vars.outputs.BACKEND_IMAGE }}:phase5 \
+            -f phase2-backend/api/Dockerfile \
+            phase2-backend/api
+
+      - name: Push backend
+        run: |
+          docker push ${{ steps.vars.outputs.BACKEND_IMAGE }}:${{ steps.vars.outputs.SHA }}
+          docker push ${{ steps.vars.outputs.BACKEND_IMAGE }}:phase5
+
+      - name: Build worker
+        run: |
+          docker build \
+            -t ${{ steps.vars.outputs.WORKER_IMAGE }}:${{ steps.vars.outputs.SHA }} \
+            -t ${{ steps.vars.outputs.WORKER_IMAGE }}:phase5 \
+            -f phase5-worker/Dockerfile \
+            phase5-worker
+
+      - name: Push worker
+        run: |
+          docker push ${{ steps.vars.outputs.WORKER_IMAGE }}:${{ steps.vars.outputs.SHA }}
+          docker push ${{ steps.vars.outputs.WORKER_IMAGE }}:phase5

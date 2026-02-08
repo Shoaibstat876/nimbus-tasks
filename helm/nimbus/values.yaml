@@ -17,8 +17,8 @@ frontend:
 backend:
   name: nimbus-backend
   image:
-    repository: nimbus-backend
-    tag: v-feb8-step8b
+    repository: ghcr.io/Shoaibstat876/nimbus-backend
+    tag: phase5
   replicas: 1
   containerPort: 8000
   servicePort: 8000
@@ -43,8 +43,8 @@ backend:
 worker:
   name: nimbus-worker
   image:
-    repository: nimbus-worker
-    tag: v-feb7-step8
+    repository: ghcr.io/Shoaibstat876/nimbus-worker
+    tag: phase5
   replicas: 1
   containerPort: 8001
   servicePort: 8001
