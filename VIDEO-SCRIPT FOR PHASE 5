@@ -44,3 +44,5 @@ curl.exe -i http://127.0.0.1:3500/v1.0/healthz
 
 
 http://nimbus.local/login
+
+http://129.212.246.79/login
