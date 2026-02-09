@@ -1,0 +1,17 @@
+﻿# Phase V Proof — Helm + Workloads + Ingress
+# Date: 2026-02-10 01:57:51
+
+Helm releases:
+NAME  	NAMESPACE	REVISION	UPDATED                              	STATUS  	CHART       	APP VERSION nimbus	nimbus   	4       	2026-02-10 00:35:37.5631574 +0500 PKT	deployed	nimbus-0.1.0	phase4     
+
+Pods:
+NAME                               READY   STATUS    RESTARTS   AGE   IP             NODE                 NOMINATED NODE   READINESS GATES nimbus-backend-b48f8cdb9-gsqzf     2/2     Running   0          82m   10.108.0.14    default-pool-ktqf7   <none>           <none> nimbus-frontend-749967c88d-jnffz   1/1     Running   0          82m   10.108.0.107   default-pool-ktqf7   <none>           <none> nimbus-worker-5fb85c58f4-sslgz     2/2     Running   0          82m   10.108.0.149   default-pool-ktqfm   <none>           <none>
+
+Containers per pod (sidecar proof):
+nimbus-backend-b48f8cdb9-gsqzf => backend,daprd, nimbus-frontend-749967c88d-jnffz => frontend, nimbus-worker-5fb85c58f4-sslgz => worker,daprd,
+
+Services:
+NAME                  TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                               AGE nimbus-backend        ClusterIP   10.109.24.232   <none>        8000/TCP                              34h nimbus-backend-dapr   ClusterIP   None            <none>        80/TCP,50001/TCP,50002/TCP,9090/TCP   34h nimbus-frontend       ClusterIP   10.109.13.205   <none>        3000/TCP                              34h nimbus-worker         ClusterIP   10.109.27.120   <none>        8001/TCP                              34h nimbus-worker-dapr    ClusterIP   None            <none>        80/TCP,50001/TCP,50002/TCP,9090/TCP   34h
+
+Ingress:
+NAME             CLASS   HOSTS          ADDRESS          PORTS   AGE nimbus-ingress   nginx   nimbus.local   129.212.246.79   80      34h

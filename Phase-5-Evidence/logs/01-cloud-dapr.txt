@@ -1,0 +1,17 @@
+﻿# Phase V Proof — Cloud Cluster + Dapr
+# Date: 2026-02-10 01:57:47
+
+Context:
+do-blr1-k8s-1-34-1-do-3-blr1-1770536877705
+
+Cluster info:
+Kubernetes control plane is running at https://678f3eb1-1d54-45ca-8486-af0faab8589e.k8s.ondigitalocean.com CoreDNS is running at https://678f3eb1-1d54-45ca-8486-af0faab8589e.k8s.ondigitalocean.com/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy  To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+Nodes:
+NAME                 STATUS   ROLES    AGE   VERSION   INTERNAL-IP   EXTERNAL-IP       OS-IMAGE                       KERNEL-VERSION        CONTAINER-RUNTIME default-pool-ktqf7   Ready    <none>   36h   v1.34.1   10.122.0.2    139.59.80.89      Debian GNU/Linux 13 (trixie)   6.12.48+deb13-amd64   containerd://1.7.28 default-pool-ktqfm   Ready    <none>   36h   v1.34.1   10.122.0.3    143.244.134.111   Debian GNU/Linux 13 (trixie)   6.12.48+deb13-amd64   containerd://1.7.28
+
+Dapr system pods:
+NAME                                    READY   STATUS    RESTARTS   AGE dapr-dashboard-85dcbbb967-fc6tz         1/1     Running   0          36h dapr-operator-7d6b889c69-lkfz4          1/1     Running   0          36h dapr-placement-server-0                 1/1     Running   0          36h dapr-scheduler-server-0                 1/1     Running   0          36h dapr-scheduler-server-1                 1/1     Running   0          36h dapr-scheduler-server-2                 1/1     Running   0          36h dapr-sentry-67576b47d5-95d8g            1/1     Running   0          36h dapr-sidecar-injector-9f49cdd68-mszpl   1/1     Running   0          36h
+
+Nimbus components:
+NAME            AGE kafka-pubsub    35h reminder-cron   35h secretstore     35h

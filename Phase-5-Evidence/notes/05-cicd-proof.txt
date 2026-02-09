@@ -1,0 +1,16 @@
+﻿# Phase V Proof — CI/CD
+# Date: 2026-02-10 01:58:05
+
+Workflow:
+.github/workflows/phase5-build-push.yml
+
+Latest commit:
+f85a36b Fix GHCR auth using PAT (Phase V CI/CD)
+
+Actions: GREEN (manual screenshot)
+
+Registry:
+GHCR packages: nimbus-backend, nimbus-worker
+Expected tags:
+- phase5
+- <commit-sha>
