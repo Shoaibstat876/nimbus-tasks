@@ -1,0 +1,46 @@
+✅ EXACT COMMANDS (copy/paste)
+1) Cloud context + namespaces (proves you’re on DOKS)
+cd "D:\Shoaib Project\nimbus-tasks"
+kubectl config current-context
+kubectl get ns
+
+2) Pods + rollout status (proves all workloads are healthy)
+kubectl -n nimbus get pods -o wide
+kubectl -n nimbus rollout status deploy/nimbus-backend
+kubectl -n nimbus rollout status deploy/nimbus-worker
+kubectl -n nimbus rollout status deploy/nimbus-frontend
+
+3) Dapr sidecar + image proof (proves Dapr enabled + correct images)
+kubectl -n nimbus describe pod -l app=nimbus-backend | Select-String "dapr.io/app-id|Containers:|backend:|daprd:|Image:"
+kubectl -n nimbus describe pod -l app=nimbus-worker  | Select-String "dapr.io/app-id|Containers:|worker:|daprd:|Image:"
+
+4) Dapr components exist (pubsub + cron + secretstore)
+kubectl -n nimbus get components
+
+5) Ingress routes (proves /api → backend, / → frontend)
+kubectl -n nimbus get ingress
+kubectl -n nimbus describe ingress nimbus-ingress | Select-String "Address:|Host|/api|nimbus-backend|nimbus-frontend"
+
+6) Live HTTP proof (frontend routing + backend health)
+curl.exe -I http://nimbus.local/ | findstr /i "HTTP/"
+curl.exe -i http://nimbus.local/api/health
+
+7) Auth login + token + protected endpoint proof
+$TOKEN = ( '{ "email": "test@user.com", "password": "test123" }' | curl.exe -s -H "Content-Type: application/json" --data-binary "@-" "http://nimbus.local/api/auth/login" | ConvertFrom-Json ).access_token
+$TOKEN.Length
+curl.exe -i -H "Authorization: Bearer $TOKEN" "http://nimbus.local/api/internal/secret-proof"
+
+✅ OPTIONAL (only if you want 1 extra “wow” proof)
+
+Dapr sidecar health via port-forward (keep short—don’t let it eat time)
+
+$POD=(kubectl -n nimbus get pod -l app=nimbus-backend -o jsonpath="{.items[0].metadata.name}")
+kubectl -n nimbus port-forward $POD 3500:3500
+
+
+Then in another terminal:
+
+curl.exe -i http://127.0.0.1:3500/v1.0/healthz
+
+
+http://nimbus.local/login
