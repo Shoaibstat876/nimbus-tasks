@@ -20,8 +20,30 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
+    # 1) Host-based rule (works when Host: nimbus.local)
     - host: {{ .Values.ingress.host | quote }}
       http:
+        paths:
+          # API: /api/* -> backend
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.backend.name }}
+                port:
+                  number: {{ .Values.backend.servicePort }}
+
+          # UI: everything else -> frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.frontend.name }}
+                port:
+                  number: {{ .Values.frontend.servicePort }}
+
+    # 2) Catch-all rule (NO host) so public IP works for judges
+    - http:
         paths:
           # API: /api/* -> backend
           - path: /api
