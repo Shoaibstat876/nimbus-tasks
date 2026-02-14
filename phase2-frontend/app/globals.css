@@ -1,5 +1,52 @@
 @import "tailwindcss";
 
+/* =========================================================
+   NIMBUS UI TOKENS — Single Source of Truth (Locked)
+   Rule: UI colors must come from tokens (CSS variables).
+   Tailwind utilities allowed for layout/spacing/typography.
+   Compatibility: deterministic tokens only.
+   ========================================================= */
+
+:root {
+  /* Base */
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --text: #0F172A;
+  --muted: #475569;
+  --border: #E2E8F0;
+
+  /* Refined neutrals */
+  --surface-2: #F1F5F9;
+  --line: rgba(15, 23, 42, 0.06);
+
+  /* Accent */
+  --accent: #0F766E;
+  --accent-hover: #115E59;
+  --accent-active: #0B5F59;
+  --ring: rgba(15, 118, 110, 0.25);
+
+  /* Radius */
+  --radius-input: 10px;
+
+  /* Semantic */
+  --success-text: #15803D;
+  --success-bg: #F0FDF4;
+  --success-border: #BBF7D0;
+
+  --danger-text: #B91C1C;
+  --danger-bg: #FEF2F2;
+  --danger-border: #FECACA;
+  --danger-hover: #FDE2E2;
+
+  --warning-text: #92400E;
+  --warning-bg: #FFFBEB;
+  --warning-border: #FDE68A;
+
+  --info-text: #1D4ED8;
+  --info-bg: #EFF6FF;
+  --info-border: #BFDBFE;
+}
+
 /* App-wide base styling */
 html,
 body {
@@ -7,5 +54,71 @@ body {
 }
 
 body {
-  background-color: white;
+  background: var(--bg);
+  color: var(--text);
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Form controls inherit typography */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Placeholder styling */
+::placeholder {
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* Accessible focus ring */
+:where(
+    a,
+    button,
+    input,
+    select,
+    textarea,
+    [role="button"],
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-input);
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(15, 118, 110, 0.16);
+}
+
+/* Subtle scrollbar (optional but premium) */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.14);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
 }
