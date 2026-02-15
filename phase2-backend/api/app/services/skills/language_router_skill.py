@@ -42,6 +42,7 @@ def resolve_language(preferred: Optional[str], message: str) -> str:
     Returns: "en" or "ur"
     """
     if _is_valid_lang(preferred):
+        assert preferred is not None
         return preferred.strip().lower()
 
     msg = (message or "").strip()

@@ -6,9 +6,9 @@ All tools are stateless and enforce owner-only access.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any, Dict
 
-from sqlmodel import Session, select
+from sqlmodel import Session, desc, select
 
 from ..database import engine
 from ..models import Task, User
@@ -106,6 +106,7 @@ def add_task_tool(input_data: AddTaskInput) -> ToolResponse:
         with Session(engine) as session:
             # Validate user exists
             user = _validate_user(session, input_data.user_id)
+            assert user.id is not None
 
             # Validate title
             title = _validate_title(input_data.title)
@@ -154,19 +155,20 @@ def list_tasks_tool(input_data: ListTasksInput) -> ToolResponse:
         with Session(engine) as session:
             # Validate user exists
             user = _validate_user(session, input_data.user_id)
+            assert user.id is not None
 
             # Build query
             query = select(Task).where(Task.user_id == user.id)
 
             # Apply status filter
             if input_data.status == "pending":
-                query = query.where(Task.is_completed == False)
+                query = query.where(Task.is_completed == False)  # noqa: E712
             elif input_data.status == "completed":
-                query = query.where(Task.is_completed == True)
+                query = query.where(Task.is_completed == True)  # noqa: E712
             # "all" or None - no filter
 
             # Order by newest first
-            query = query.order_by(Task.created_at.desc())
+            query = query.order_by(desc(Task.created_at))
 
             tasks = session.exec(query).all()
 
@@ -204,6 +206,7 @@ def complete_task_tool(input_data: CompleteTaskInput) -> ToolResponse:
         with Session(engine) as session:
             # Validate user exists
             user = _validate_user(session, input_data.user_id)
+            assert user.id is not None
 
             # Get owned task
             task = _get_owned_task(session, input_data.task_id, user.id)
@@ -250,6 +253,7 @@ def update_task_tool(input_data: UpdateTaskInput) -> ToolResponse:
         with Session(engine) as session:
             # Validate user exists
             user = _validate_user(session, input_data.user_id)
+            assert user.id is not None
 
             # Get owned task
             task = _get_owned_task(session, input_data.task_id, user.id)
@@ -297,6 +301,7 @@ def delete_task_tool(input_data: DeleteTaskInput) -> ToolResponse:
         with Session(engine) as session:
             # Validate user exists
             user = _validate_user(session, input_data.user_id)
+            assert user.id is not None
 
             # Check confirmation
             if not input_data.confirm:

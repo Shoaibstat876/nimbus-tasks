@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
-import { clearToken, getToken } from "../../lib/services/auth"; // Token Authority (Law 3)
+import { clearToken, getToken } from "../../lib/services/auth";
 import { AIFloat } from "../components/AIFloat";
 
 type Task = {
@@ -13,14 +13,39 @@ type Task = {
 };
 
 type Me = { id: number; email: string };
-
 type BusyGlobal = "refresh" | "add" | "save" | null;
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-700">
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium border"
+      style={{
+        borderColor: "var(--border)",
+        background: "var(--surface)",
+        color: "var(--muted)",
+      }}
+    >
       {children}
     </span>
+  );
+}
+
+function Pill({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div
+      className="rounded-2xl border px-4 py-3 text-sm"
+      style={{
+        borderColor: "var(--border)",
+        background: "var(--surface)",
+      }}
+    >
+      <div className="text-xs" style={{ color: "var(--muted)" }}>
+        {label}
+      </div>
+      <div className="mt-0.5 font-semibold" style={{ color: "var(--text)" }}>
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -31,7 +56,6 @@ function getStatus(e: unknown): number | null {
     const v = (e as { status?: unknown }).status;
     return typeof v === "number" ? v : null;
   }
-  // fallback: try parse "401 ..." style messages (legacy)
   if (e instanceof Error) {
     const m = e.message.trim();
     const n = Number(m.slice(0, 3));
@@ -67,12 +91,12 @@ export default function TasksPage() {
   const [title, setTitle] = useState("");
   const [titleError, setTitleError] = useState<string | null>(null);
 
-  // Update (Spec 020)
+  // Update
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
 
-  // UI states (Law 5)
+  // UI states
   const [initialLoading, setInitialLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [status, setStatus] = useState("Ready");
@@ -86,19 +110,17 @@ export default function TasksPage() {
 
   const redirectToLogin = useCallback(
     (message: string) => {
-      // ✅ Law 3: only auth.ts clears token
       clearToken();
       setMe(null);
       setTasks([]);
       setErrorMsg(null);
       setStatus(message);
-      router.replace("/login"); // prevent back-button confusion
+      router.replace("/login");
     },
     [router]
   );
 
   const showNotFoundStyle = useCallback((message: string) => {
-    // ✅ Law 4: do not leak whether resource exists or is owned
     setMe(null);
     setTasks([]);
     setErrorMsg(message);
@@ -110,7 +132,6 @@ export default function TasksPage() {
     setStatus("Loading /me + tasks...");
     setErrorMsg(null);
 
-    // ✅ Guard: no token → redirect immediately
     if (!getToken()) {
       redirectToLogin("Please login to continue.");
       setInitialLoading(false);
@@ -132,19 +153,16 @@ export default function TasksPage() {
 
       const st = getStatus(e);
 
-      // ✅ Spec 010: protected page → if unauthenticated, go login
       if (st === 401) {
         redirectToLogin("Session expired. Redirecting to login...");
         return;
       }
 
-      // ✅ Law 4: treat 403/404 as not-found style
       if (st === 403 || st === 404) {
         showNotFoundStyle("This page is not available.");
         return;
       }
 
-      // ✅ Law 5: friendly error state with retry
       setErrorMsg(`Could not load tasks. ${niceError(e)}`);
       setStatus("Error");
     } finally {
@@ -232,7 +250,6 @@ export default function TasksPage() {
       setStatus("Toggling...");
       setErrorMsg(null);
 
-      // optimistic UI
       setTasks((prev) =>
         prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t))
       );
@@ -261,10 +278,7 @@ export default function TasksPage() {
       setStatus("Deleting...");
       setErrorMsg(null);
 
-      // capture snapshot for rollback
       const before = tasks;
-
-      // optimistic UI
       setTasks((prev) => prev.filter((t) => t.id !== id));
 
       try {
@@ -288,196 +302,344 @@ export default function TasksPage() {
 
   const isDisabled = busyGlobal !== null || busyTaskId !== null;
 
-  // ✅ If not authed and not loading, we should already be redirecting.
   if (!initialLoading && !me) return null;
 
+  const card = "rounded-3xl border bg-[var(--surface)] shadow-sm";
+  const mutedPanel = "rounded-2xl border px-4 py-3 text-sm";
+  const input =
+    "h-12 w-full rounded-2xl border bg-[var(--surface)] px-4 text-sm outline-none disabled:opacity-60";
+  const btn =
+    "h-12 rounded-2xl px-5 text-sm font-medium shadow-sm transition-colors disabled:opacity-60";
+  const btnOutline = `${btn} border bg-[var(--surface)] hover:bg-[var(--surface-2)]`;
+  const btnPrimary = `${btn} text-white hover:opacity-95`;
+
+  // Row-sized controls (for list edit mode)
+  const rowInput =
+    "h-11 w-full rounded-2xl border bg-[var(--surface)] px-4 text-sm outline-none disabled:opacity-60";
+  const rowBtn =
+    "h-11 rounded-2xl px-4 text-sm font-medium shadow-sm transition-colors disabled:opacity-60";
+  const rowBtnOutline = `${rowBtn} border bg-[var(--surface)] hover:bg-[var(--surface-2)]`;
+  const rowBtnPrimary = `${rowBtn} text-white hover:opacity-95`;
+
   return (
-    <main className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Tasks</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          This page proves: <span className="font-semibold">CRUD</span> +{" "}
-          <span className="font-semibold">owner-only isolation</span>.
-        </p>
+    <div className="min-h-[calc(100vh-64px)]">
+      {/* Sticky Top Bar */}
+      <div
+        className="sticky top-0 z-20 border-b"
+        style={{ borderColor: "var(--border)", background: "var(--bg)" }}
+      >
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1
+              className="text-2xl sm:text-3xl font-semibold tracking-tight"
+              style={{ color: "var(--text)" }}
+            >
+              Tasks
+            </h1>
+            <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+              Owner-only isolation + CRUD proof.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={refresh}
+              disabled={isDisabled}
+              className={btnOutline}
+              style={{ borderColor: "var(--border)" }}
+            >
+              {busyGlobal === "refresh" ? "Refreshing..." : "Refresh"}
+            </button>
+            <div className="hidden sm:block">
+              <Badge>Status: {status}</Badge>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4">
-        {initialLoading ? (
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-6 text-sm text-zinc-700">
-            Loading tasks...
+      {/* Page Body */}
+      <main className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Mobile status */}
+        <div className="sm:hidden mb-4">
+          <div
+            className={mutedPanel}
+            style={{
+              borderColor: "var(--border)",
+              background: "var(--surface-2)",
+              color: "var(--muted)",
+            }}
+          >
+            Status:{" "}
+            <span className="font-semibold" style={{ color: "var(--text)" }}>
+              {status}
+            </span>
           </div>
-        ) : null}
+        </div>
 
+        {/* Error */}
         {errorMsg ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
-            <div className="font-medium">Something went wrong</div>
+          <div
+            className="rounded-2xl border px-4 py-4 text-sm mb-6"
+            style={{
+              borderColor: "var(--danger-border)",
+              background: "var(--danger-bg)",
+              color: "var(--danger-text)",
+            }}
+          >
+            <div className="font-semibold">Something went wrong</div>
             <div className="mt-1">{errorMsg}</div>
             <button
               onClick={refresh}
               disabled={isDisabled}
-              className="mt-3 rounded-2xl border border-rose-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-rose-50 disabled:opacity-60"
+              className="mt-3 h-10 rounded-2xl border bg-[var(--surface)] px-4 text-sm font-medium shadow-sm hover:bg-[var(--danger-hover)] disabled:opacity-60"
+              style={{ borderColor: "var(--danger-border)", color: "var(--danger-text)" }}
             >
               Retry
             </button>
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="text-sm text-zinc-600">
-              Signed in:{" "}
-              <span className="font-semibold text-zinc-900">
-                {me ? `${me.email} (id=${me.id})` : "—"}
-              </span>
+        {/* Two-column on desktop, stacked on mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Rail */}
+          <section className="lg:col-span-4 space-y-6">
+            {/* Identity */}
+            <div className={`${card} p-6`} style={{ borderColor: "var(--border)" }}>
+              <div className="text-xs" style={{ color: "var(--muted)" }}>
+                Signed in
+              </div>
+              <div className="mt-1 font-semibold break-words" style={{ color: "var(--text)" }}>
+                {me ? me.email : "—"}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge>id: {me?.id ?? "—"}</Badge>
+                <Badge>Total: {tasks.length}</Badge>
+                <Badge>Done: {completedCount}</Badge>
+                <Badge>Pending: {pendingCount}</Badge>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Badge>Total: {tasks.length}</Badge>
-              <Badge>Completed: {completedCount}</Badge>
-              <Badge>Pending: {pendingCount}</Badge>
+            {/* Add Task */}
+            <div className={`${card} p-6`} style={{ borderColor: "var(--border)" }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                    Add a task
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                    Keep titles short and clear.
+                  </div>
+                </div>
+                <div className="hidden sm:block">
+                  <Badge>Max {TITLE_MAX}</Badge>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <input
+                  value={title}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setTitle(v);
+                    if (titleError) setTitleError(validateTitle(v));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void addTask();
+                  }}
+                  disabled={isDisabled}
+                  className={input}
+                  style={{ borderColor: "var(--border)" }}
+                  placeholder='e.g., "Deploy Phase 2"'
+                />
+
+                {titleError ? (
+                  <div className="text-sm" style={{ color: "var(--danger-text)" }}>
+                    {titleError}
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={() => void addTask()}
+                  disabled={isDisabled}
+                  className={`${btnPrimary} w-full`}
+                  style={{ background: "var(--accent)" }}
+                >
+                  {busyGlobal === "add" ? "Adding..." : "Add Task"}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={refresh}
-              disabled={isDisabled}
-              className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
-            >
-              {busyGlobal === "refresh" ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
-          Status: <span className="font-medium">{status}</span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={title}
-              onChange={(e) => {
-                const v = e.target.value;
-                setTitle(v);
-                if (titleError) setTitleError(validateTitle(v));
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addTask();
-              }}
-              disabled={isDisabled}
-              className="flex-1 rounded-2xl border border-zinc-200 px-4 py-3 outline-none focus:border-zinc-400 disabled:opacity-60"
-              placeholder='New task title (e.g., "Neon proof task")'
-            />
-            <button
-              onClick={() => void addTask()}
-              disabled={isDisabled}
-              className="rounded-2xl bg-zinc-900 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60"
-            >
-              {busyGlobal === "add" ? "Adding..." : "Add Task"}
-            </button>
-          </div>
-
-          {titleError ? <div className="text-sm text-rose-700">{titleError}</div> : null}
-        </div>
-
-        <div className="overflow-hidden rounded-3xl border border-zinc-200">
-          {tasks.length === 0 ? (
-            <div className="p-8 text-sm text-zinc-600">
-              No tasks yet. Create your first task to prove Neon persistence.
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <Pill label="Total tasks" value={tasks.length} />
+              <Pill
+                label="Completion"
+                value={`${tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0}%`}
+              />
             </div>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {tasks.map((t) => {
-                const rowBusy = busyTaskId === t.id || busyGlobal !== null;
-                const isEditing = editingId === t.id;
+          </section>
 
-                return (
-                  <div
-                    key={t.id}
-                    className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{t.is_completed ? "✅" : "⬜"}</span>
+          {/* Main List */}
+          <section className="lg:col-span-8">
+            <div className={`${card} overflow-hidden`} style={{ borderColor: "var(--border)" }}>
+              <div
+                className="px-6 py-5 border-b flex items-center justify-between"
+                style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+              >
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                    Your tasks
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                    Tap to toggle. Edit when needed.
+                  </div>
+                </div>
 
-                        {isEditing ? (
-                          <div className="flex flex-col gap-2 w-full">
-                            <input
-                              value={editTitle}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setEditTitle(v);
-                                if (editError) setEditError(validateTitle(v));
-                              }}
-                              disabled={isDisabled}
-                              className="w-full rounded-2xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                            />
-                            {editError ? (
-                              <div className="text-sm text-rose-700">{editError}</div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div className="font-semibold truncate">{t.title}</div>
-                        )}
-                      </div>
+                {initialLoading ? <Badge>Loading...</Badge> : <Badge>{tasks.length} items</Badge>}
+              </div>
 
-                      <div className="mt-1 text-xs text-zinc-500">Task #{t.id}</div>
-                    </div>
+              {initialLoading ? (
+                <div
+                  className="px-6 py-10 text-sm"
+                  style={{ color: "var(--muted)", background: "var(--surface-2)" }}
+                >
+                  Loading tasks...
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="px-6 py-14 text-center">
+                  <div className="text-3xl">📝</div>
+                  <div className="mt-3 font-semibold" style={{ color: "var(--text)" }}>
+                    No tasks yet
+                  </div>
+                  <div className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
+                    Add your first task from the left panel.
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--line)]">
+                  {tasks.map((t) => {
+                    const rowBusy = busyTaskId === t.id || busyGlobal !== null;
+                    const isEditing = editingId === t.id;
 
-                    <div className="flex gap-2">
-                      {isEditing ? (
-                        <>
-                          <button
-                            onClick={() => void saveEdit(t.id)}
-                            disabled={rowBusy}
-                            className="rounded-2xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60"
-                          >
-                            {busyGlobal === "save" ? "Saving..." : "Save"}
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            disabled={rowBusy}
-                            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => startEdit(t)}
-                            disabled={rowBusy}
-                            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
-                          >
-                            Edit
-                          </button>
+                    return (
+                      <div
+                        key={t.id}
+                        className="px-6 py-4 hover:bg-[var(--surface-2)] transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
                           <button
                             onClick={() => void toggleTask(t.id)}
                             disabled={rowBusy}
-                            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
+                            className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl border bg-[var(--surface)] hover:bg-[var(--surface-2)] disabled:opacity-60"
+                            style={{ borderColor: "var(--border)" }}
+                            aria-label="Toggle task"
+                            title="Toggle"
                           >
-                            {busyTaskId === t.id ? "Working..." : "Toggle"}
+                            <span className="text-lg">{t.is_completed ? "✅" : "⬜"}</span>
                           </button>
-                          <button
-                            onClick={() => void deleteTask(t.id)}
-                            disabled={rowBusy}
-                            className="rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-60"
-                          >
-                            {busyTaskId === t.id ? "Working..." : "Delete"}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
 
-      <AIFloat />
-    </main>
+                          <div className="min-w-0 flex-1">
+                            {isEditing ? (
+                              <div>
+                                {/* EDIT ROW — cohesive + aligned */}
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                  <input
+                                    value={editTitle}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setEditTitle(v);
+                                      if (editError) setEditError(validateTitle(v));
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") void saveEdit(t.id);
+                                      if (e.key === "Escape") cancelEdit();
+                                    }}
+                                    disabled={isDisabled}
+                                    className={`${rowInput} sm:flex-1`}
+                                    style={{ borderColor: "var(--border)" }}
+                                    aria-label="Edit task title"
+                                  />
+
+                                  <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:justify-end">
+                                    <button
+                                      onClick={() => void saveEdit(t.id)}
+                                      disabled={rowBusy}
+                                      className={`${rowBtnPrimary} w-full sm:w-auto`}
+                                      style={{ background: "var(--accent)" }}
+                                    >
+                                      {busyGlobal === "save" ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      onClick={cancelEdit}
+                                      disabled={rowBusy}
+                                      className={`${rowBtnOutline} w-full sm:w-auto`}
+                                      style={{ borderColor: "var(--border)" }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {editError ? (
+                                  <div className="mt-2 text-sm" style={{ color: "var(--danger-text)" }}>
+                                    {editError}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div
+                                    className={`font-semibold truncate ${t.is_completed ? "opacity-70" : ""}`}
+                                    style={{
+                                      color: t.is_completed ? "var(--muted)" : "var(--text)",
+                                    }}
+                                  >
+                                    {t.title}
+                                  </div>
+
+                                  <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                                    Task #{t.id}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => startEdit(t)}
+                                    disabled={rowBusy}
+                                    className="h-9 rounded-2xl px-3 text-xs font-medium border bg-[var(--surface)] hover:bg-[var(--surface-2)] disabled:opacity-60"
+                                    style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                                  >
+                                    Edit
+                                  </button>
+
+                                  <button
+                                    onClick={() => void deleteTask(t.id)}
+                                    disabled={rowBusy}
+                                    className="h-9 rounded-2xl px-3 text-xs font-medium border bg-[var(--surface)] hover:bg-[var(--danger-hover)] disabled:opacity-60"
+                                    style={{
+                                      borderColor: "var(--danger-border)",
+                                      color: "var(--danger-text)",
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <AIFloat />
+      </main>
+    </div>
   );
 }

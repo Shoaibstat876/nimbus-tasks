@@ -1,12 +1,6 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Role = "user" | "assistant";
 
@@ -115,10 +109,7 @@ export default function NimbusAssistantModal({
     try {
       const res = await onSend(msg, conversationId ?? undefined);
       setConversationId(res.conversationId);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: res.reply },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", content: res.reply }]);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -129,7 +120,7 @@ export default function NimbusAssistantModal({
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") send();
+      if (e.key === "Enter") void send();
       if (e.key === "Escape") onClose();
     },
     [send, onClose]
@@ -138,30 +129,48 @@ export default function NimbusAssistantModal({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
       <button
+        type="button"
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
         aria-label="Close"
       />
 
-      <div className="relative w-[92vw] max-w-md rounded-2xl bg-white shadow-xl border">
+      <div
+        className="relative w-[92vw] max-w-md overflow-hidden rounded-2xl border shadow-xl"
+        style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <div className="flex items-center gap-2">
-            <div className="text-sm font-semibold">{title}</div>
-            <span className="text-[11px] px-2 py-0.5 rounded-full border bg-zinc-50 text-zinc-700">
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+        >
+          <div className="min-w-0 flex items-center gap-2">
+            <div className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
+              {title}
+            </div>
+            <span
+              className="shrink-0 rounded-full border px-2 py-0.5 text-[11px]"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface-2)",
+                color: "var(--muted)",
+              }}
+            >
               {tag}
             </span>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-zinc-500 hover:bg-zinc-100"
+            className="rounded-xl px-2 py-1 text-sm hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ring-offset-[var(--bg)]"
+            style={{
+              color: "var(--muted)",
+              background: "transparent",
+              outlineColor: "var(--ring)",
+            }}
             aria-label="Close"
           >
             ✕
@@ -170,11 +179,11 @@ export default function NimbusAssistantModal({
 
         {/* Body */}
         <div className="px-4 py-3 space-y-3">
-          <div className="text-sm text-zinc-600">
+          <div className="text-sm" style={{ color: "var(--muted)" }}>
             Ask anything about your Nimbus tasks. Try:
             <ul className="mt-2 list-disc pl-5 space-y-1">
               {examples.map((ex) => (
-                <li key={ex} className="text-zinc-600">
+                <li key={ex} style={{ color: "var(--muted)" }}>
                   “{ex}”
                 </li>
               ))}
@@ -182,28 +191,50 @@ export default function NimbusAssistantModal({
           </div>
 
           {error ? (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+            <div
+              className="rounded-xl border px-3 py-2 text-sm"
+              style={{
+                borderColor: "var(--danger-border)",
+                background: "var(--danger-bg)",
+                color: "var(--danger-text)",
+              }}
+            >
               {error}
             </div>
           ) : null}
 
-          <div className="max-h-64 overflow-auto rounded-xl border bg-zinc-50 p-3 space-y-2">
+          <div
+            className="max-h-64 overflow-auto rounded-2xl border p-3 space-y-2"
+            style={{
+              borderColor: "var(--border)",
+              background: "var(--surface-2)",
+            }}
+          >
             {busy && messages.length === 0 ? (
-              <div className="text-sm text-zinc-600">Loading...</div>
+              <div className="text-sm" style={{ color: "var(--muted)" }}>
+                Loading...
+              </div>
             ) : null}
 
             {!busy && messages.length === 0 ? (
-              <div className="text-sm text-zinc-600">
+              <div className="text-sm" style={{ color: "var(--muted)" }}>
                 No messages yet. Say hello.
               </div>
             ) : null}
 
             {messages.map((m, i) => (
-              <div key={i} className="rounded-lg border bg-white px-3 py-2">
-                <div className="text-xs font-semibold text-zinc-500">
+              <div
+                key={i}
+                className="rounded-2xl border px-3 py-2"
+                style={{
+                  borderColor: "var(--border)",
+                  background: "var(--surface)",
+                }}
+              >
+                <div className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
                   {m.role}
                 </div>
-                <div className="text-sm text-zinc-900 whitespace-pre-wrap">
+                <div className="text-sm whitespace-pre-wrap" style={{ color: "var(--text)" }}>
                   {m.content}
                 </div>
               </div>
@@ -219,13 +250,33 @@ export default function NimbusAssistantModal({
               onKeyDown={onKeyDown}
               placeholder={placeholder}
               disabled={busy}
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+              className="w-full rounded-2xl border px-3 py-2 text-sm outline-none disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-offset-2 ring-offset-[var(--bg)]"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--surface)",
+                color: "var(--text)",
+                outlineColor: "var(--ring)",
+              }}
             />
 
             <button
+              type="button"
               onClick={send}
               disabled={!canSend}
-              className="mt-2 w-full rounded-lg bg-zinc-800 text-white py-2 text-sm disabled:opacity-50"
+              className="mt-2 w-full rounded-2xl py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ring-offset-[var(--bg)]"
+              style={{
+                background: canSend ? "var(--accent)" : "var(--surface-2)",
+                color: canSend ? "#ffffff" : "var(--muted)",
+                outlineColor: "var(--ring)",
+              }}
+              onMouseEnter={(e) => {
+                if (!canSend) return;
+                (e.currentTarget as HTMLButtonElement).style.background = "var(--accent-hover)";
+              }}
+              onMouseLeave={(e) => {
+                if (!canSend) return;
+                (e.currentTarget as HTMLButtonElement).style.background = "var(--accent)";
+              }}
             >
               {busy ? "Sending..." : "SEND"}
             </button>

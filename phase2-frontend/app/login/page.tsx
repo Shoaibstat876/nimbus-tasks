@@ -9,16 +9,18 @@ import { setToken, logoutEverywhere, getToken } from "@/lib/services/auth";
 type BannerType = "ok" | "warn" | "err" | "info";
 
 function Banner({ type, text }: { type: BannerType; text: string }) {
+  const base = "rounded-2xl border px-4 py-3 text-sm";
+
   const cls =
     type === "ok"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-text)]"
       : type === "warn"
-      ? "border-amber-200 bg-amber-50 text-amber-900"
+      ? "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)]"
       : type === "err"
-      ? "border-rose-200 bg-rose-50 text-rose-900"
-      : "border-zinc-200 bg-zinc-50 text-zinc-700";
+      ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)]"
+      : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]";
 
-  return <div className={`rounded-2xl border px-4 py-3 text-sm ${cls}`}>{text}</div>;
+  return <div className={`${base} ${cls}`}>{text}</div>;
 }
 
 function getErrorMessage(e: unknown): string {
@@ -42,6 +44,11 @@ function getStatus(e: unknown): number | null {
     const v = (e as { status?: unknown }).status;
     return typeof v === "number" ? v : null;
   }
+  if (e instanceof Error) {
+    const m = e.message.trim();
+    const n = Number(m.slice(0, 3));
+    if (!Number.isNaN(n) && n >= 100 && n <= 599) return n;
+  }
   return null;
 }
 
@@ -63,21 +70,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState("Pass12345!");
   const [busy, setBusy] = useState(false);
 
+  const defaultInfo = "Login → verify /me → redirect to Tasks.";
+
   const [banner, setBanner] = useState<{ type: BannerType; text: string }>({
     type: "info",
-    text: "Login → verify /me → redirect to Tasks.",
+    text: defaultInfo,
   });
+
+  const clearBannerToDefault = useCallback(() => {
+    setBanner({ type: "info", text: defaultInfo });
+  }, []);
 
   const verifyExistingSession = useCallback(async () => {
     const token = getToken();
     if (!token) return;
+    if (busy) return; // ✅ avoid fighting with manual login
 
     setBusy(true);
     setBanner({ type: "info", text: "Checking existing session…" });
 
     try {
       const me = await api.me();
-      setBanner({ type: "ok", text: `Already signed in as ${me.email}. Redirecting to Tasks…` });
+      setBanner({ type: "ok", text: `Already signed in as ${me.email}. Redirecting…` });
       router.replace("/tasks");
     } catch (e) {
       const st = getStatus(e);
@@ -90,9 +104,8 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
-  }, [router]);
+  }, [router, busy]);
 
-  // ✅ If already authenticated, don't show login again.
   useEffect(() => {
     void verifyExistingSession();
   }, [verifyExistingSession]);
@@ -117,7 +130,7 @@ export default function LoginPage() {
 
       setBanner({
         type: "ok",
-        text: `Logged in as ${me.email}. Redirecting to Tasks…`,
+        text: `Logged in as ${me.email}. Redirecting…`,
       });
 
       router.replace("/tasks");
@@ -129,51 +142,69 @@ export default function LoginPage() {
     }
   }, [busy, email, password, router]);
 
+  const onKey = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") void onLogin();
+      if (e.key === "Escape") clearBannerToDefault();
+    },
+    [onLogin, clearBannerToDefault]
+  );
+
   return (
-    <main className="mx-auto max-w-xl space-y-6">
-      <div className="flex items-center gap-3">
-        <h2 className="text-2xl font-bold">Nimbus — Login</h2>
-      </div>
+    <main className="min-h-screen flex items-center justify-center px-6 py-10 bg-[var(--bg)]">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
+            Nimbus Login
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)]">Secure access to your task system</p>
+        </div>
 
-      <Banner type={banner.type} text={banner.text} />
+        <Banner type={banner.type} text={banner.text} />
 
-      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4">
-        <label className="space-y-1 block">
-          <div className="text-sm font-medium">Email</div>
-          <input
-            value={email}
+        <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm space-y-5">
+          <label className="block space-y-1">
+            <div className="text-sm font-medium text-[var(--text)]">Email</div>
+            <input
+              value={email}
+              disabled={busy}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={onKey}
+              className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 text-sm outline-none disabled:opacity-60"
+              autoComplete="email"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <div className="text-sm font-medium text-[var(--text)]">Password</div>
+            <input
+              type="password"
+              value={password}
+              disabled={busy}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={onKey}
+              className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 text-sm outline-none disabled:opacity-60"
+              autoComplete="current-password"
+            />
+          </label>
+
+          <button
+            onClick={onLogin}
             disabled={busy}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-4 py-3 disabled:opacity-70"
-            autoComplete="email"
-          />
-        </label>
+            className="h-12 w-full rounded-2xl bg-[var(--accent)] px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--accent-hover)] active:bg-[var(--accent-active)] disabled:opacity-60"
+          >
+            {busy ? "Signing in…" : "Login"}
+          </button>
 
-        <label className="space-y-1 block">
-          <div className="text-sm font-medium">Password</div>
-          <input
-            type="password"
-            value={password}
-            disabled={busy}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-4 py-3 disabled:opacity-70"
-            autoComplete="current-password"
-          />
-        </label>
-
-        <button
-          onClick={onLogin}
-          disabled={busy}
-          className="w-full rounded-xl bg-zinc-900 px-4 py-3 text-white font-medium hover:bg-zinc-800 disabled:opacity-60"
-        >
-          {busy ? "Signing in…" : "Login"}
-        </button>
-
-        <div className="text-center text-sm text-zinc-600">
-          New here?{" "}
-          <Link href="/register" className="font-medium text-zinc-900 underline">
-            Create account
-          </Link>
+          <div className="text-center text-sm text-[var(--muted)]">
+            New here?{" "}
+            <Link
+              href="/register"
+              className="font-medium text-[var(--accent)] underline underline-offset-4 hover:text-[var(--accent-hover)]"
+            >
+              Create account
+            </Link>
+          </div>
         </div>
       </div>
     </main>

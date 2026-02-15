@@ -62,22 +62,26 @@ function toModalMessages(raw: unknown): ModalMessage[] {
 export function AIFloat() {
   const pathname = usePathname();
 
-  const isGuestRoute = useMemo(() => pathname === "/login" || pathname === "/register", [pathname]);
+  const isGuestRoute = useMemo(
+    () => pathname === "/login" || pathname === "/register",
+    [pathname]
+  );
 
   const [mounted, setMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
 
   const [open, setOpen] = useState(false);
-
   const [me, setMe] = useState<Me | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    // Avoid synchronous setState-in-effect (eslint react-hooks/set-state-in-effect)
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {
     if (!mounted) return;
-    setAuthed(isAuthenticated());
+    // Avoid synchronous setState-in-effect; compute auth on the client only
+    queueMicrotask(() => setAuthed(isAuthenticated()));
   }, [mounted, pathname]);
 
   const ensureMe = useCallback(async (): Promise<Me> => {
@@ -136,6 +140,7 @@ export function AIFloat() {
     [ensureMe]
   );
 
+  // Important: keep initial server/client HTML identical to prevent hydration mismatch
   if (!mounted) return null;
   if (isGuestRoute) return null;
   if (!authed) return null;
@@ -146,11 +151,20 @@ export function AIFloat() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open Nimbus AI"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full
-                   bg-zinc-900 px-5 py-3 text-sm font-semibold text-white
-                   shadow-xl hover:bg-zinc-800"
+        className="fixed bottom-6 right-6 z-50 inline-flex h-12 items-center justify-center rounded-full px-5 text-sm font-semibold shadow-lg transition-colors hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ring-offset-[var(--bg)] disabled:opacity-60"
+        style={{
+          background: "var(--accent)",
+          color: "#ffffff",
+          boxShadow: "0 10px 25px rgba(0,0,0,0.12)",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = "var(--accent-hover)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = "var(--accent)";
+        }}
       >
-        🤖 <span>AI</span>
+        AI
       </button>
 
       <NimbusAssistantModal
@@ -159,7 +173,7 @@ export function AIFloat() {
         title="Nimbus Assistant"
         tag="TASKS AI"
         examples={[
-          "Add a task: “Finish Step 6 UI”",
+          "Add a task: â€œFinish Step 6 UIâ€",
           "List my incomplete tasks and summarize in 3 points",
         ]}
         placeholder="Ask Nimbus about your tasks..."

@@ -8,16 +8,36 @@ import { api } from "@/lib/api";
 type BannerType = "ok" | "warn" | "err" | "info";
 
 function Banner({ type, text }: { type: BannerType; text: string }) {
-  const cls =
+  const style =
     type === "ok"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      ? {
+          borderColor: "var(--success-border)",
+          background: "var(--success-bg)",
+          color: "var(--success-text)",
+        }
       : type === "warn"
-      ? "border-amber-200 bg-amber-50 text-amber-900"
+      ? {
+          borderColor: "var(--warning-border)",
+          background: "var(--warning-bg)",
+          color: "var(--warning-text)",
+        }
       : type === "err"
-      ? "border-rose-200 bg-rose-50 text-rose-900"
-      : "border-zinc-200 bg-zinc-50 text-zinc-700";
+      ? {
+          borderColor: "var(--danger-border)",
+          background: "var(--danger-bg)",
+          color: "var(--danger-text)",
+        }
+      : {
+          borderColor: "var(--info-border)",
+          background: "var(--info-bg)",
+          color: "var(--info-text)",
+        };
 
-  return <div className={`rounded-2xl border px-4 py-3 text-sm ${cls}`}>{text}</div>;
+  return (
+    <div className="rounded-2xl border px-4 py-3 text-sm" style={style}>
+      {text}
+    </div>
+  );
 }
 
 function getErrorMessage(e: unknown): string {
@@ -78,7 +98,6 @@ export default function RegisterPage() {
         text: "Account created successfully. Redirecting to login…",
       });
 
-      // Explicit UX delay (intentional, not hidden)
       setTimeout(() => {
         router.replace("/login");
       }, 800);
@@ -92,34 +111,58 @@ export default function RegisterPage() {
     }
   }, [busy, email, password, router]);
 
+  const card = "rounded-3xl border bg-[var(--surface)] shadow-sm";
+  const input =
+    "h-12 w-full rounded-2xl border bg-[var(--surface)] px-4 text-sm outline-none disabled:opacity-60";
+  const btn =
+    "h-12 w-full rounded-2xl px-5 text-sm font-medium shadow-sm transition-colors disabled:opacity-60";
+  const btnPrimary = `${btn} text-white hover:opacity-95`;
+
   return (
-    <main className="mx-auto max-w-xl space-y-6">
+    <main className="mx-auto w-full max-w-xl px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       <div className="flex items-center gap-3">
-        <h2 className="text-2xl font-bold">Nimbus — Register</h2>
+        <h2
+          className="text-2xl sm:text-3xl font-semibold tracking-tight"
+          style={{ color: "var(--text)" }}
+        >
+          Nimbus — Register
+        </h2>
       </div>
 
       <Banner type={banner.type} text={banner.text} />
 
-      <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm space-y-4">
+      <div className={`${card} p-6 space-y-4`} style={{ borderColor: "var(--border)" }}>
         <label className="block space-y-1">
-          <div className="text-sm font-medium">Email</div>
+          <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+            Email
+          </div>
           <input
             value={email}
             disabled={busy}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-4 py-3 disabled:opacity-70"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void onRegister();
+            }}
+            className={input}
+            style={{ borderColor: "var(--border)" }}
             autoComplete="email"
           />
         </label>
 
         <label className="block space-y-1">
-          <div className="text-sm font-medium">Password</div>
+          <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+            Password
+          </div>
           <input
             type="password"
             value={password}
             disabled={busy}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-zinc-200 px-4 py-3 disabled:opacity-70"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void onRegister();
+            }}
+            className={input}
+            style={{ borderColor: "var(--border)" }}
             autoComplete="new-password"
           />
         </label>
@@ -127,14 +170,19 @@ export default function RegisterPage() {
         <button
           onClick={onRegister}
           disabled={busy}
-          className="w-full rounded-xl bg-zinc-900 px-4 py-3 font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
+          className={btnPrimary}
+          style={{ background: "var(--accent)" }}
         >
           {busy ? "Creating…" : "Create Account"}
         </button>
 
-        <div className="text-center text-sm text-zinc-600">
+        <div className="text-center text-sm" style={{ color: "var(--muted)" }}>
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-zinc-900 underline">
+          <Link
+            href="/login"
+            className="font-medium underline underline-offset-4"
+            style={{ color: "var(--text)" }}
+          >
             Login
           </Link>
         </div>

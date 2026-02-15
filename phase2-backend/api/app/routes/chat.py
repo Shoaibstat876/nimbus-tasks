@@ -1,6 +1,6 @@
 # app/routes/chat.py
 
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
