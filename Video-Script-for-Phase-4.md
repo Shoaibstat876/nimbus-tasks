@@ -3,6 +3,16 @@ In this video, I will demonstrate Phase 4 proof for my Nimbus Tasks project.
 This includes Docker, Minikube, Kubernetes Ingress, backend authentication, protected APIs, and Helm deployment.
 I will show everything step by step with live commands and outputs.”
 
+##find minikube:
+$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+
+##now test :
+where.exe minikube
+minikube version
+
+##now apply this:
+minikube start --driver=docker
+
 🔹 STEP 1 — Docker Engine Proof
 
 “First, I am starting Docker Engine from the Start Menu.
