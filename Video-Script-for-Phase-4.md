@@ -196,3 +196,7 @@ helm get values nimbus -n nimbus
 “This completes the Level 8 proof for my Nimbus Tasks project.
 All components are running successfully using Docker, Minikube, Kubernetes Ingress, secure authentication, protected APIs, and Helm deployment.
 Thank you.”
+
+$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [Environment]::GetEnvironmentVariable("Path","User")
+where.exe helm
+helm version
