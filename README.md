@@ -1,20 +1,27 @@
 # Nimbus Tasks — Hackathon 2 Full-Stack Task Management App
 
-Nimbus Tasks is a full-stack task management application built with a Next.js frontend, FastAPI backend, JWT authentication, CRUD APIs, owner-only task security, deployment proof, and Kubernetes/cloud deployment work.
+Nimbus Tasks is a full-stack task management application built with a Next.js frontend, FastAPI backend, JWT authentication, CRUD APIs, owner-only task security, AI task-command handling, and Kubernetes/cloud deployment proof.
 
 This project was developed phase-wise for Hackathon 2 and is presented as a practical full-stack engineering project.
 
 ---
 
-## Live Links
+## Live / Deployment Links
 
-- Frontend: https://nimbus-tasks-web.vercel.app/login
-- Backend Health: https://nimbus-backend-sc34.onrender.com/api/health
-- Backend Swagger Docs: https://nimbus-backend-sc34.onrender.com/docs
+- Frontend UI: https://nimbus-tasks-web.vercel.app/login
+- Backend Deployment: Render deployment completed previously; currently requires service resume on Render.
+- Backend Swagger Docs: Available after Render service is resumed.
 
-> Note: The backend API and Swagger documentation are live and verifiable. If the deployed frontend shows a temporary fetch issue, the backend can still be tested directly through Swagger and curl commands.
+> Note: The frontend UI is deployed on Vercel. The backend was deployed on Render, but the Render service is currently suspended and may need to be resumed before live login/API testing works again.
 
 ---
+
+## Important Branches
+
+- `main` — recruiter-facing overview and final README
+- `phase5-cloud` — final cloud/Kubernetes/Dapr proof branch
+- `phase4-k8s` — Docker, Minikube, Kubernetes Ingress, and Helm proof
+- `phase3-bonus` — deployed frontend/backend and AI command proof
 
 ## Project Goal
 
